@@ -163,12 +163,12 @@ Item {
               width: keyCatcher.width
 
               Text {
-                text: modelData.approvalId
+                text: modelData.summary || modelData.approvalId
                 color: root.foreground
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+                font.pixelSize: Style.font.body
                 width: parent.width - Style.space(180)
-                elide: Text.ElideMiddle
+                wrapMode: Text.WordWrap
               }
 
               MouseArea {

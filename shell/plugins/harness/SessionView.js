@@ -3,8 +3,39 @@ function pendingApprovals(state) {
     return []
   }
   return Object.keys(state.pending).map(function (id) {
-    return state.pending[id]
+    const item = state.pending[id]
+    const mutation = item && item.mutation
+    return {
+      approvalId: item.approvalId || id,
+      mutation: mutation,
+      summary: (mutation && mutation.summary) || pendingSummary(mutation),
+    }
   })
+}
+
+function pendingSummary(mutation) {
+  if (!mutation) {
+    return 'Pending approval'
+  }
+  if (mutation.summary) {
+    return mutation.summary
+  }
+  if (mutation.type === 'reset') {
+    return 'Reset this Harness session'
+  }
+  if (mutation.type === 'l1' && mutation.op === 'launch.terminal') {
+    return 'Launch the default terminal'
+  }
+  if (mutation.type === 'l1' && mutation.op === 'launch.browser') {
+    return 'Launch the default browser'
+  }
+  if (mutation.type === 'l2' && mutation.op === 'pkg.add') {
+    return 'Install packages'
+  }
+  if (mutation.type === 'l2' && mutation.op === 'system.reboot') {
+    return 'Reboot the system'
+  }
+  return 'Pending approval'
 }
 
 function title(state) {
@@ -62,6 +93,7 @@ if (typeof module !== 'undefined') {
     hostDownMessage,
     parseHostState,
     pendingApprovals,
+    pendingSummary,
     title,
   }
 }

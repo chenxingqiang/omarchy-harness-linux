@@ -140,6 +140,7 @@ const parsed = view.parseHostState(JSON.stringify({
 assertEqual(parsed.hostDown, false, 'valid session JSON is not host-down')
 assertEqual(parsed.title, 'Inspect theme', 'overlay title comes from session metadata')
 assertEqual(parsed.pending.length, 1, 'overlay lists pending approvals')
+assertEqual(parsed.pending[0].summary, 'Reset this Harness session', 'overlay pending reset has a summary')
 
 const calls = []
 const harness = createHarness({
@@ -177,7 +178,15 @@ const acpReset = harness.acp.handle({
   params: { name: 'session_reset', arguments: {} },
 })
 assertEqual(acpReset.result.content.pending, true, 'ACP session_reset is pending approval')
-assertEqual(calls.length, beforeAcp, 'ACP session write does not call omarchy or hyprctl')
+assert(
+  calls.slice(beforeAcp).every((argv) => argv[1] === 'notification'),
+  'ACP session reset only sends an approval card'
+)
+assertEqual(
+  calls.slice(beforeAcp).some((argv) => argv.includes('omarchy-harness-approve')),
+  false,
+  'ACP reset card does not auto-allow'
+)
 
 const acpDenied = harness.acp.handle({
   jsonrpc: '2.0',

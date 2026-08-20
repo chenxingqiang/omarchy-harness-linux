@@ -212,10 +212,14 @@ assertDeepEqual(
 
 const updatePending = harness.dispatch.system.update({})
 assertEqual(updatePending.pending, true, 'update asks after snapshot')
-assertDeepEqual(
-  calls[calls.length - 1],
-  ['omarchy', 'snapshot', 'create'],
+assert(
+  calls.some((argv) => argv[1] === 'snapshot' && argv[2] === 'create'),
   'update snapshots before asking'
+)
+assertEqual(
+  calls.filter((argv) => argv[1] === 'update').length,
+  0,
+  'pending update does not run yet'
 )
 harness.decide(updatePending.approvalId, 'allow')
 assertDeepEqual(
@@ -285,8 +289,11 @@ dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
 echo "$dump_json" | jq -e '.phase == 3 and .dispatch == "l2" and .write == true and .system == true and .l2_surface == "executable" and .preset == "session"' >/dev/null
 pass "dump-config reports executable L2 without auto-approve"
 
-if grep -Eq 'bash |pacman |hyprctl |--exec' "$CALL_LOG"; then
+if grep -Eq 'bash |pacman |hyprctl ' "$CALL_LOG"; then
   fail "L2 system does not dispatch untyped mutation paths" "$(cat "$CALL_LOG")"
+fi
+if grep -- '--exec' "$CALL_LOG" | grep -vq 'omarchy-shell shell summon omarchy.harness'; then
+  fail "L2 approval card exec is only overlay summon" "$(cat "$CALL_LOG")"
 fi
 if [[ -s $MUTATION_LOG ]]; then
   fail "L2 system does not take untyped mutation paths" "$(cat "$MUTATION_LOG")"

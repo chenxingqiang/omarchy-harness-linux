@@ -3,7 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { createAcpSession, loadProfile } = require('./acp')
-const { createSessionStore } = require('./session')
+const { createSessionStore, requiresApproval } = require('./session')
 const mutations = require('./mutations')
 
 const HARNESS_ROOT = path.resolve(__dirname, '..')
@@ -208,6 +208,23 @@ function createHarness(options = {}) {
     newId: options.newId,
     approvalTimeoutMs: options.approvalTimeoutMs,
   })
+
+  function notifyApproval(mutation) {
+    exec(mutations.approvalCardArgv(mutation))
+  }
+
+  const innerWrite = store.write.bind(store)
+  store.write = function write(mutation) {
+    const payload =
+      mutation && requiresApproval(mutation)
+        ? { ...mutation, summary: mutations.approvalSummary(mutation) }
+        : mutation
+    const result = innerWrite(payload)
+    if (result && result.pending) {
+      notifyApproval(payload)
+    }
+    return result
+  }
   const log = createSessionLog({
     logPath,
     now,

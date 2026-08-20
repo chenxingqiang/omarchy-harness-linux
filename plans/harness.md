@@ -1091,6 +1091,8 @@ Every representable L2 op runs **snapshot (when the contract requires it) → ap
 
 Held / unrepresentable on both surfaces: generic execute, shell, `hyprctl <string>`, `etc.write`, `usr.write`, firmware, `omarchy_cli`, `toggle.hybrid-gpu`.
 
+Pending L1/L2/session-reset approvals emit an `omarchy-action` toast that punches DND. The click command is a fixed `omarchy-shell shell summon omarchy.harness`. It does not auto-allow. Allow/deny still post to the host. Overlay remains an ACP client and is not a second approval store.
+
 ### Phase 4 — harden and default-off → default-on
 
 Only after the overlay has been the daily driver on real machines: enable the unit at first-run, keep the permission preset at `session`, keep coding CLIs unchanged. Promote from preview in the manual.
@@ -1127,6 +1129,7 @@ Automated tests stay in this repo's existing runners. Graphical checks follow th
 | ACP/CLI write surface | CLI | 3 | `write: true`, `system: true`, `dispatch: l2` |
 | `dispatch.system` cannot represent execute/shell | overlay unit | 3 | methods absent; ACP `execute` is `L2_UNREPRESENTABLE` |
 | pkg.add snapshots then asks | overlay unit | 3 | deny and idempotent allow do not install |
+| pending approval sends omarchy-action card | overlay unit | 3 | click summons overlay; does not auto-allow |
 
 Do not run graphical acceptance in `./test/all`. Host tests must not require a live compositor; provider fakes are the seam's purpose.
 

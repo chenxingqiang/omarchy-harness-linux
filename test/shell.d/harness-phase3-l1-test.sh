@@ -117,11 +117,23 @@ assertDeepEqual(calls[5], ['omarchy', 'hyprland', 'focus', 'app', 'Slack'], 'win
 const beforeLaunch = calls.length
 const pending = harness.dispatch.write['launch.terminal']({})
 assertEqual(pending.pending, true, 'launch.terminal asks for approval')
-assertEqual(calls.length, beforeLaunch, 'pending launch does not exec')
+assertEqual(
+  calls.filter((argv) => argv[1] === 'launch').length,
+  0,
+  'pending launch does not exec'
+)
+assert(
+  calls.slice(beforeLaunch).some((argv) => argv[1] === 'notification'),
+  'pending launch sends an approval card'
+)
 
 const denied = harness.decide('l1-1', 'deny')
 assertEqual(denied.decision.decision, 'deny', 'launch deny is recorded')
-assertEqual(calls.length, beforeLaunch, 'denied launch does not exec')
+assertEqual(
+  calls.filter((argv) => argv[1] === 'launch').length,
+  0,
+  'denied launch does not exec'
+)
 
 const pendingAgain = harness.dispatch.write['launch.browser']({})
 assertEqual(pendingAgain.pending, true, 'launch.browser asks for approval')
@@ -197,8 +209,11 @@ dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
 echo "$dump_json" | jq -e '.phase == 3 and .dispatch == "l2" and .write == true and .system == true and .l1_surface == "executable"' >/dev/null
 pass "dump-config reports executable L1 and L2"
 
-if grep -Eq 'pkg add|update|--exec' "$CALL_LOG"; then
+if grep -Eq 'pkg add|update -y' "$CALL_LOG"; then
   fail "L1 write does not dispatch L2 routes" "$(cat "$CALL_LOG")"
+fi
+if grep -- '--exec' "$CALL_LOG" | grep -vq 'omarchy-shell shell summon omarchy.harness'; then
+  fail "L1 approval card exec is only overlay summon" "$(cat "$CALL_LOG")"
 fi
 if [[ -s $MUTATION_LOG ]]; then
   fail "L1 write does not take L2 mutation paths" "$(cat "$MUTATION_LOG")"
