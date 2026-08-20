@@ -98,7 +98,28 @@ function createSessionStore(options = {}) {
   const now = options.now || defaultNow
   const newId = options.newId || (() => crypto.randomUUID())
   const approvalTimeoutMs = options.approvalTimeoutMs == null ? 60000 : options.approvalTimeoutMs
-  let currentId = options.id || 'current'
+  const fallbackId = options.fallbackId || 'current'
+  const activeFile = path.join(dir, 'active')
+
+  function readActiveId() {
+    try {
+      const text = fs.readFileSync(activeFile, 'utf8').trim()
+      return text || null
+    } catch {
+      return null
+    }
+  }
+
+  function persistActive(sessionId) {
+    currentId = sessionId
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(activeFile, sessionId + '\n')
+  }
+
+  let currentId = options.id || readActiveId() || fallbackId
+  if (!options.id) {
+    persistActive(currentId)
+  }
 
   function fileFor(sessionId) {
     return path.join(dir, sessionId + '.jsonl')
@@ -230,7 +251,7 @@ function createSessionStore(options = {}) {
       error.code = 'UNKNOWN_SESSION'
       throw error
     }
-    currentId = sessionId
+    persistActive(sessionId)
     tick()
     append({ type: 'session/resume', sessionId })
     return { ok: true, sessionId: currentId, state: state() }
@@ -245,7 +266,7 @@ function createSessionStore(options = {}) {
     }
     const parentId = currentId
     append({ type: 'session/forked', childId }, parentId)
-    currentId = childId
+    persistActive(childId)
     append({ type: 'session/fork', parent: parentId }, childId)
     return { ok: true, sessionId: childId, parent: parentId }
   }

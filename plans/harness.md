@@ -762,7 +762,7 @@ Phase 2
 
 `dispatch.write` is still absent. Overlay, approval, and session resume/fork do not call Omarchy effectors, pkexec, or Hyprland mutate paths.
 
-The overlay is an ACP/host client: it reads `session state` and posts allow/deny through `omarchy-harness-host` one-shot commands, so it works while the user unit stays opt-in. If the host binary cannot answer, the overlay shows an error and leaves the desktop unchanged.
+The overlay is an ACP/host client: it reads `session state` and posts allow/deny through `omarchy-harness-host` one-shot commands, so it works while the user unit stays opt-in. If the host binary cannot answer, the overlay shows an error and leaves the desktop unchanged. Fork/resume persist the active session id in the session directory so a later one-shot CLI follows the same session.
 
 ### Phase 3 — system writes
 

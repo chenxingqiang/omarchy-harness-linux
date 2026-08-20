@@ -105,6 +105,16 @@ const replayed = createSessionStore({ dir, id: parentId, now })
 assertEqual(replayed.state().metadata.title, 'parent', 'replay reproduces session state from the log')
 assert(Object.keys(replayed.state().decisions).length > 0, 'replay preserves approval decisions')
 
+store.write({ type: 'metadata', patch: { title: 'live' } })
+const forkedAgain = store.fork()
+store.write({ type: 'metadata', patch: { title: 'forked-live' } })
+const restarted = createSessionStore({ dir, now })
+assertEqual(restarted.id, forkedAgain.sessionId, 'new process follows the active forked session')
+assertEqual(restarted.state().metadata.title, 'forked-live', 'restart preserves forked session state')
+restarted.resume(forkedAgain.parent)
+const restartedParent = createSessionStore({ dir, now })
+assertEqual(restartedParent.state().metadata.title, 'live', 'new process follows the resumed session')
+
 const overlay = fs.readFileSync(path.join(root, 'shell/plugins/harness/Overlay.qml'), 'utf8')
 assert(/function open\(payloadJson\)/.test(overlay), 'overlay exposes open')
 assert(/function close\(\)/.test(overlay), 'overlay exposes close')
@@ -131,7 +141,7 @@ assertEqual(parsed.pending.length, 1, 'overlay lists pending approvals')
 
 const calls = []
 const harness = createHarness({
-  logPath: path.join(dir, 'host.jsonl'),
+  logPath: path.join(dir, 'host-session', 'host.jsonl'),
   now,
   newId: () => 'host-' + (++ids),
   exec(argv) {

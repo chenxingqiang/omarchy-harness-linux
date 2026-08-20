@@ -200,7 +200,8 @@ function createHarness(options = {}) {
     path.join(home, '.local/state/omarchy/harness/sessions/current.jsonl')
   const store = options.store || createSessionStore({
     dir: path.dirname(logPath),
-    id: path.basename(logPath, '.jsonl'),
+    id: options.sessionId,
+    fallbackId: path.basename(logPath, '.jsonl'),
     now,
     newId: options.newId,
     approvalTimeoutMs: options.approvalTimeoutMs,
