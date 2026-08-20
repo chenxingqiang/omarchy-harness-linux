@@ -1,6 +1,8 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 6. Rev 4 froze the four architecture invariants. Rev 5 implemented Phase 2 session write. Rev 6 **freezes Phase 1+2 as the Session Control Plane MVP**. The invariant is **Session mutation ≠ OS mutation**. Phase 3 is a new security boundary, not Phase 2 privilege expansion. Mermaid diagrams are unchanged. No OS mutation is added here.
+Revision 6 is the **Phase 2 freeze point**. Rev 4 froze the four architecture invariants. Rev 5 implemented Phase 2 session write. Rev 6 freezes Phase 1+2 as the Session Control Plane MVP and locks how later reviews work. **Phase 3 is not opened.** It is a new security boundary, not Phase 2 privilege expansion. Mermaid diagrams are unchanged. No OS mutation is added here.
+
+**Status:** Rev 6 / Phase 2 frozen. Phase 3 unopened. Next architecture review: the minimum typed mutation surface for `dispatch.write`, not the dispatcher itself.
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -374,38 +376,104 @@ Three properties of that freeze stay locked:
 
 Not Phase 2, and not a late addition to this MVP: pkg / update, pkexec, `/etc`, `/usr`, system snapshot, generic shell, universal dispatcher, arbitrary Hyprland mutation, `dispatch.write`, `dispatch.system`.
 
-### Mutation ladder (Phase 3 threshold only)
-
-Do not design the first system tool catalog here. Freeze only the ladder Phase 3 must climb. Phase 3 opens a new security boundary; it does not widen Phase 2.
+Subsequent reviews, from this freeze forward, keep these three architecture invariants:
 
 ```text
-                 ┌──────────────────────┐
-                 │       Observe        │
-                 │      readonly        │
-                 └──────────┬───────────┘
-                            │
-                            ▼
-                 ┌──────────────────────┐
-                 │    Session Write     │
-                 │     Phase 2          │
-                 └──────────┬───────────┘
-                            │
-                      Approval
-                            │
-                            ▼
-                 ┌──────────────────────┐
-                 │     System Write     │
-                 │     Phase 3          │
-                 └──────────┬───────────┘
-                            │
-                ┌───────────┴───────────┐
-                ▼                       ▼
-         dispatch.write         dispatch.system
-                │                       │
-                ▼                       ▼
-           session-safe             privileged
-                                    / snapshot
+1. Session mutation ≠ OS mutation
+
+2. Session Log is the control-plane fact source,
+   not an event store for the whole desktop
+
+3. Overlay is an ACP client,
+   not a second session/approval runtime
 ```
+
+The freeze point itself:
+
+```text
+Session Control Plane MVP
+────────────────────────────────
+
+Observe
+  │
+  ▼
+Session Write
+  │
+  ▼
+Approval
+  │
+  │   ← current freeze
+  ▼
+════════════════════════════
+        SECURITY BOUNDARY
+════════════════════════════
+  │
+  ▼
+System Write
+  │
+  ├── dispatch.write
+  └── dispatch.system
+```
+
+### Mutation classes (Phase 3 first cut: classify, do not catalog)
+
+Phase 3 is a new security boundary. Do not start it by listing twenty tools. First classify every future mutation by risk so `dispatch.write` cannot become a universal entry.
+
+```text
+L0  Observe
+    readonly
+    no approval
+
+L1  Session-safe / reversible desktop write
+    approval policy optional
+    no privilege
+    no system package/config mutation
+
+L2  System mutation
+    snapshot
+    approval
+    privilege
+    explicit audit event
+```
+
+Every future tool must answer:
+
+```text
+Tool
+ ├─ changes what?
+ ├─ reversible?
+ ├─ requires privilege?
+ ├─ affects session only / desktop / system?
+ ├─ snapshot required?
+ └─ approval required?
+```
+
+L0 is Phase 1 (frozen). Session-log writes with session-level approval are Phase 2 (frozen). L1 is the first candidate class for `dispatch.write` when Phase 3 opens. L2 is `dispatch.system` and always runs `snapshot → approval → execute → audit`.
+
+When Phase 3 opens, review L1 first, as typed operations, not as a dispatcher:
+
+```text
+window / workspace move
+theme switch
+notification
+toggle an existing Omarchy session-level feature
+launch an already-allowed desktop action
+```
+
+Defer these; they are L2, not a late L1:
+
+```text
+pkg install/remove
+system update
+/etc modification
+/usr modification
+service enable/disable
+shutdown/reboot
+firmware
+arbitrary shell
+```
+
+That L1 list is the next review object. It is not authorized here. Until a Phase 3 mutation-surface review approves a typed subset, `dispatch.write` and `dispatch.system` stay absent.
 
 Phase 3 entry criteria (all must already be true before any OS mutation exists):
 
@@ -421,11 +489,9 @@ Phase 3 Entry Criteria
 ✓ no generic dispatcher exists
 ```
 
-The first Phase 3 review is the **minimum mutation surface**: which typed operations `dispatch.write` may grow first, and which operations must run `snapshot → approval → execute`. That cut is not made in this revision.
-
 ## Frozen v1 decisions
 
-These are normative. Phase 1 code follows them; they are not reopened while writing the host.
+These are normative. Phase 1–2 code follows them; they are not reopened to grow OS mutation into the Session Control Plane MVP.
 
 | Item | v1 decision | Why |
 |---|---|---|
@@ -641,7 +707,7 @@ Prompt assembly: a `system-prompt` plugin injects an "Omarchy session" section d
 
 Discovery source: `omarchy commands --json` (binary, route, summary, args, aliases, `requires-sudo`). That listing is how the commands seam knows a route exists. It is not 1:1 with tools.
 
-The lists below are the eventual typed catalog shape, not a Phase 3 authorization to implement them. Phase 3 starts with a minimum-surface review, not by enabling this whole table.
+The lists below are the eventual typed catalog shape, not a Phase 3 authorization. Phase 3 starts by classifying L0 / L1 / L2 and reviewing a minimum typed L1 surface, not by enabling this whole table.
 
 **Observe** (Phase 1; auto-allow, read-only):
 
@@ -856,17 +922,13 @@ Phase 2
 
 The overlay is an ACP/host client: it reads `session state` and posts allow/deny through `omarchy-harness-host` one-shot commands, so it works while the user unit stays opt-in. If the host binary cannot answer, the overlay shows an error and leaves the desktop unchanged. Fork/resume persist the active session id in the session directory so a later one-shot CLI follows the same session.
 
-### Phase 3 — new security boundary: OS mutation
+### Phase 3 — unopened: new security boundary
 
-Phase 3 is not a continuation of Phase 2 privilege. It is the first time Harness may change the system, and only after the Phase 3 entry criteria above are already true.
+Phase 3 is not opened in this revision. It is not a continuation of Phase 2 privilege. It is the first OS-side-effect release gate, and only after the Phase 3 entry criteria above are already true.
 
-Do not start by listing every eventual tool. The first review is the minimum mutation surface:
+The first cut classifies mutations (L0 / L1 / L2) and then reviews the minimum typed L1 surface for `dispatch.write`. It does not grow a generic dispatcher. L2 stays behind `snapshot → approval → execute → audit`.
 
-- which typed operations `dispatch.write` may grow first (session-safe Omarchy data-plane)
-- which operations belong on `dispatch.system` and must run `snapshot → approval → execute`
-- privilege (`sudo` vs `pkexec`) stays behind that second rung
-
-Until that cut is approved, `dispatch.write` and `dispatch.system` stay absent. Crash-diagnosis against an OS preset, and spawning a coding CLI into `~/Work` without the system catalog, wait on the same boundary.
+Until that review approves a typed subset, `dispatch.write` and `dispatch.system` stay absent. Crash-diagnosis against an OS preset, and spawning a coding CLI into `~/Work` without the system catalog, wait on the same boundary.
 
 ### Phase 4 — harden and default-off → default-on
 
@@ -905,7 +967,7 @@ Do not run graphical acceptance in `./test/all`. Host tests must not require a l
 
 Decided in Rev 2: Node shipping, prebundled `node_modules`, ACP-first, manual `dsh` bump. See Frozen v1 decisions.
 
-Still open (not the Session Control Plane MVP; wait for a Phase 3 mutation-surface review):
+Still open (not the Session Control Plane MVP; wait for a Phase 3 L1 mutation-surface review, not a dispatcher redesign):
 
 1. **Multi-user**: each graphical user has their own user unit and `$DSH_HOME`. Root never runs the host. Is a system-wide Harness (for the Server plan's sysop) a different profile, or out of scope forever?
 2. **Local models**: Ollama / LM Studio already exist in the menu. Should `ctx.llm` default to a local OpenAI-compatible endpoint when one is up, or stay cloud-first with DeepSeek's adapter? Phase 1 has no model turn.
@@ -924,3 +986,5 @@ Still open (not the Session Control Plane MVP; wait for a Phase 3 mutation-surfa
 - Enabling the user unit for everyone on `omarchy update`
 - Adding OS mutation (`dispatch.write`, `dispatch.system`, pkexec, snapshot, Hyprland mutate) to Phase 2
 - Treating Phase 3 as a widening of Phase 2 instead of a new security boundary
+- Opening Phase 3 by enumerating twenty tools instead of classifying L0 / L1 / L2
+- Growing a generic `dispatch.write` that later tools opt into

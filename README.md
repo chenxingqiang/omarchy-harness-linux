@@ -2,7 +2,7 @@
 
 Omarchy is a beautiful, modern & opinionated Linux distribution by DHH.
 
-This tree additionally treats [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as the session **Control Plane**: the user still operates Omarchy; AI action reaches Linux only through typed tools, policy, and Omarchy effectors (the **Data Plane**); agent-caused facts live in one **Session Log**. Phase 1+2 is the frozen Session Control Plane MVP: Harness may observe Omarchy and mutate its own session; it still cannot mutate Linux. The design is [`plans/harness.md`](plans/harness.md).
+This tree additionally treats [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as the session **Control Plane**: the user still operates Omarchy; AI action reaches Linux only through typed tools, policy, and Omarchy effectors (the **Data Plane**); agent-caused facts live in one **Session Log**. Rev 6 / Phase 2 is frozen as the Session Control Plane MVP. Phase 3 is not opened. The design is [`plans/harness.md`](plans/harness.md).
 
 ```mermaid
 flowchart LR
