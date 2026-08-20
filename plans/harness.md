@@ -1,8 +1,8 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 6 is the **Phase 2 freeze point**. Rev 4 froze the four architecture invariants. Rev 5 implemented Phase 2 session write. Rev 6 freezes Phase 1+2 as the Session Control Plane MVP and locks how later reviews work. **Phase 3 is not opened.** It is a new security boundary, not Phase 2 privilege expansion. Mermaid diagrams are unchanged. No OS mutation is added here.
+Revision 6 is the **Phase 2 freeze point**. Rev 7 is the **L1 surface review**. Frozen architecture is not reopened. **Phase 3 is not opened and not authorized.** `dispatch.write` still does not exist. Mermaid diagrams are unchanged.
 
-**Status:** Rev 6 / Phase 2 Freeze is the baseline for later reviews. Frozen architecture (Control Plane, Data Plane, Session Log, Overlay as ACP client) is not reopened. Phase 3 is unopened. The only next review is L0 → L1 → L2 classification, and the sole proof for Phase 3 is: **even with `dispatch.write` fully available, Harness still cannot cross L1 → L2.**
+**Status:** Rev 6 / Phase 2 Freeze remains the baseline. Rev 7 classifies a finite L1 set against the operation contract. The sole Phase 3 proof, when that phase opens, is: **even with `dispatch.write` fully available, Harness still cannot cross L1 → L2.**
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -479,32 +479,9 @@ The Phase 3 review does not prove "can it execute?" It proves one sentence:
 
 That is the sole focus of the next Phase 3 review. A write that needs privilege, snapshot, `/etc`, `/usr`, packages, services, firmware, reboot, or a shell is L2, and `dispatch.write` must be unable to represent it.
 
-L0 is Phase 1 (frozen). Session-log writes with session-level approval are Phase 2 (frozen). L1 is the first candidate class for `dispatch.write` when Phase 3 opens. L2 is `dispatch.system` and always runs `snapshot → approval → execute → audit`.
+L0 is Phase 1 (frozen). Session-log writes with session-level approval are Phase 2 (frozen). L1 is the v0 table in the L1 surface review. L2 is `dispatch.system` and always runs `snapshot → approval → execute → audit`. Informal candidates map onto that table as: theme switch → `theme.set`; notification → `notify.send`; session-level toggle → `toggle.*`; already-allowed launch → `launch.terminal` / `launch.browser` with empty argv; window/workspace move stays held until a typed Omarchy effector exists.
 
-When Phase 3 opens, review L1 first, as typed operations, not as a dispatcher:
-
-```text
-window / workspace move
-theme switch
-notification
-toggle an existing Omarchy session-level feature
-launch an already-allowed desktop action
-```
-
-Defer these; they are L2, not a late L1:
-
-```text
-pkg install/remove
-system update
-/etc modification
-/usr modification
-service enable/disable
-shutdown/reboot
-firmware
-arbitrary shell
-```
-
-That L1 list is the next review object. It is not authorized here. Until a Phase 3 mutation-surface review approves a typed subset, `dispatch.write` and `dispatch.system` stay absent.
+The L1 table is **not authorized to implement**. Until a later revision opens Phase 3, `dispatch.write` and `dispatch.system` stay absent.
 
 Phase 3 entry criteria (all must already be true before any OS mutation exists):
 
@@ -519,6 +496,149 @@ Phase 3 Entry Criteria
 ✓ no system mutation reachable
 ✓ no generic dispatcher exists
 ```
+
+### L1 surface review (Rev 7, not authorized)
+
+L1 operations call **existing Omarchy effectors**. They do not gain `hyprctl <string>`, `omarchy <route>`, or a shell. If a desktop act has no typed Omarchy command yet, it stays off `dispatch.write` until the data plane grows that command.
+
+**v0 finite set** (eight operations):
+
+```text
+dispatch.write.theme.set
+dispatch.write.notify.send
+dispatch.write.toggle.nightlight
+dispatch.write.toggle.bar
+dispatch.write.toggle.idle
+dispatch.write.window.focus
+dispatch.write.launch.terminal
+dispatch.write.launch.browser
+```
+
+That is the whole v0 object. No `execute`, no extra methods, no argv passthrough.
+
+Held out of v0 even when they look desktop-shaped:
+
+```text
+window move / workspace move     no typed Omarchy effector yet; raw hyprctl dispatch is not L1
+font.set                         user-config write; second wave
+theme.bg.set / theme.bg.next     second wave
+plugin.enable                    loads code; supply-chain, not v0
+toggle.screensaver               second wave
+launch.editor                    opens a path; file mutation, not v0
+omarchy-launch-or-focus          evals a launch command; shell-shaped
+omarchy-launch-terminal <cmd>    extra argv is command execution
+omarchy-notification-send --exec command execution; schema forbids the field
+omarchy-toggle-hybrid-gpu        sudo, /etc, pkg; L2
+```
+
+#### Contracts
+
+```text
+theme.set
+├── target              omarchy-theme-set <theme-name>
+├── mutation semantics  switch the user theme symlink under ~/.local/state/omarchy/current
+├── reversibility       yes — set the previous theme name from the session log
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            optional; v0 default allow
+├── audit event         omarchy/theme
+└── replay              re-apply the recorded theme name (idempotent)
+
+notify.send
+├── target              omarchy-notification-send <headline> [description] [-g] [-u]
+├── mutation semantics  show a toast; schema has no --exec, no leftover notify-send argv
+├── reversibility       n/a (ephemeral UI)
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            no
+├── audit event         omarchy/notify (model-visible only)
+└── replay              do not re-send
+
+toggle.nightlight
+├── target              omarchy-toggle-nightlight
+├── mutation semantics  flip hyprsunset temperature
+├── reversibility       yes — toggle again / set recorded on|off
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            optional; v0 default allow
+├── audit event         omarchy/toggle {name:nightlight}
+└── replay              restore recorded on|off, do not blindly toggle
+
+toggle.bar
+├── target              omarchy-toggle-bar [on|off|toggle]
+├── mutation semantics  hide or show the bar
+├── reversibility       yes
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            optional; v0 default allow
+├── audit event         omarchy/toggle {name:bar}
+└── replay              restore recorded on|off
+
+toggle.idle
+├── target              omarchy-toggle-idle stay-awake|allow-idle
+├── mutation semantics  user-state file under ~/.local/state/omarchy/indicators
+├── reversibility       yes
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            optional; v0 default allow
+├── audit event         omarchy/toggle {name:idle}
+└── replay              restore recorded stay-awake|allow-idle
+
+window.focus
+├── target              omarchy-hyprland-focus-app <app-name>
+├── mutation semantics  focus an existing client by class/title; no hyprctl dispatch string
+├── reversibility       n/a (focus only)
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            no
+├── audit event         omarchy/window {op:focus}
+└── replay              re-focus if the window still exists; otherwise skip
+
+launch.terminal
+├── target              omarchy-launch-terminal
+├── mutation semantics  open the default terminal with zero extra argv
+├── reversibility       no (starts a process)
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            optional; v0 default ask (less reversible)
+├── audit event         omarchy/launch {app:terminal}
+└── replay              do not launch again
+
+launch.browser
+├── target              omarchy-launch-browser
+├── mutation semantics  open the default browser with no URL argument
+├── reversibility       no (starts a process)
+├── privilege           none
+├── scope               desktop
+├── snapshot            no
+├── approval            optional; v0 default ask
+├── audit event         omarchy/launch {app:browser}
+└── replay              do not launch again
+```
+
+#### L1 cannot represent L2
+
+v0 `dispatch.write` is a closed method table. These must remain **unrepresentable**, not "present and denied":
+
+```text
+dispatch.write.execute(route)          absent
+dispatch.write.shell(argv)             absent
+dispatch.write.hyprctl(string)         absent
+notify.send.exec                       field absent from schema
+launch.terminal.argv                   field absent from schema
+launch.browser.url                     field absent from schema
+pkg / update / snapshot / reboot       not methods on dispatch.write
+/etc / /usr / systemd / firmware       not methods on dispatch.write
+```
+
+That is the Phase 3 proof once L1 exists: a fully available `dispatch.write` still has no handle that can cross into L2. L2, when it exists, is a different object (`dispatch.system`) and always `snapshot → approval → execute → audit`.
 
 ## Frozen v1 decisions
 
@@ -957,7 +1077,7 @@ The overlay is an ACP/host client: it reads `session state` and posts allow/deny
 
 Phase 3 is not opened in this revision. It is not a continuation of Phase 2 privilege. It is the first OS-side-effect release gate, and only after the Phase 3 entry criteria above are already true.
 
-The first cut classifies mutations (L0 / L1 / L2). L1 is a finite typed capability set, not a dispatcher permission switch. The sole Phase 3 proof is that a fully available `dispatch.write` still cannot cross L1 → L2. L2 stays behind `snapshot → approval → execute → audit`.
+The first cut classifies mutations (L0 / L1 / L2). L1 is the finite v0 table in the L1 surface review, not a dispatcher permission switch. Implementation of that table is not authorized in this revision. The sole Phase 3 proof remains: a fully available `dispatch.write` still cannot cross L1 → L2.
 
 Until that review approves a typed subset, `dispatch.write` and `dispatch.system` stay absent. Crash-diagnosis against an OS preset, and spawning a coding CLI into `~/Work` without the system catalog, wait on the same boundary.
 
@@ -999,7 +1119,7 @@ Do not run graphical acceptance in `./test/all`. Host tests must not require a l
 
 Decided in Rev 2: Node shipping, prebundled `node_modules`, ACP-first, manual `dsh` bump. See Frozen v1 decisions.
 
-Still open (not the Session Control Plane MVP; wait for a Phase 3 L1 mutation-surface review against the operation contract. Do not reopen Control Plane / Data Plane / Session Log / Overlay):
+Still open (not the Session Control Plane MVP. Rev 7 reviewed the L1 v0 table; it is not authorized. Do not reopen Control Plane / Data Plane / Session Log / Overlay):
 
 1. **Multi-user**: each graphical user has their own user unit and `$DSH_HOME`. Root never runs the host. Is a system-wide Harness (for the Server plan's sysop) a different profile, or out of scope forever?
 2. **Local models**: Ollama / LM Studio already exist in the menu. Should `ctx.llm` default to a local OpenAI-compatible endpoint when one is up, or stay cloud-first with DeepSeek's adapter? Phase 1 has no model turn.
@@ -1022,3 +1142,4 @@ Still open (not the Session Control Plane MVP; wait for a Phase 3 L1 mutation-su
 - Growing a generic `dispatch.write` that later tools opt into
 - Treating `dispatch.write` as arbitrary write, shell, or generic IPC
 - Reopening Control Plane / Data Plane / Session Log / Overlay during a Phase 3 review
+- Putting `hyprctl <string>`, `omarchy-launch-or-focus`, or `notification-send --exec` on `dispatch.write`
