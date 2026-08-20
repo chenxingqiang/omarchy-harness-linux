@@ -27,7 +27,8 @@ User-installed plugins live alongside these conceptually but on disk under
 | Network       | `omarchy.network`         | `bar-widget`            | `panels/network/Panel.qml`            |
 | Power         | `omarchy.power`           | `bar-widget`            | `panels/power/Panel.qml`              |
 | Tailscale     | `omarchy.tailscale`       | `bar-widget`            | `panels/tailscale/Panel.qml`          |
-| Agents   | `omarchy.agents`     | `bar-widget`            | `agents/Panel.qml`               |
+| Agents        | `omarchy.agents`          | `bar-widget`            | `agents/Panel.qml`                    |
+| Harness       | `omarchy.harness`         | `overlay`               | `harness/Overlay.qml`                 |
 | Weather       | `omarchy.weather`         | `bar-widget`            | `panels/weather/BarWidget.qml`        |
 | Media         | `omarchy.media`           | `service`, `bar-widget` | `services/media/Service.qml`, `services/media/BarWidget.qml` |
 | Battery       | `omarchy.battery`         | `service`               | `services/battery/Service.qml`        |

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Deny a pending Harness session approval
+# omarchy:group=harness
+# omarchy:name=deny
+# omarchy:args=<approval-id>
+
+if (($# == 0)); then
+  echo "Usage: omarchy harness deny <approval-id>" >&2
+  exit 2
+fi
+
+exec omarchy-harness-host approval decide "$1" deny

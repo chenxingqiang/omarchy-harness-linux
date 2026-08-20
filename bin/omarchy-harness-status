@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# omarchy:summary=Exit 0 when the Omarchy Harness host is running
+# omarchy:group=harness
+# omarchy:name=status
+
+set -euo pipefail
+
+if command -v systemctl >/dev/null; then
+  if systemctl --user is-active --quiet omarchy-harness.service 2>/dev/null; then
+    exit 0
+  fi
+fi
+
+runtime_dir=${XDG_RUNTIME_DIR:-}
+if [[ -n $runtime_dir && -S $runtime_dir/omarchy-harness.sock ]]; then
+  exit 0
+fi
+
+exit 1
