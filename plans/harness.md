@@ -1,8 +1,8 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 6 is the **Phase 2 freeze point**. Rev 7 is the **L1 surface review**. Frozen architecture is not reopened. **Phase 3 is not opened and not authorized.** `dispatch.write` still does not exist. Mermaid diagrams are unchanged.
+Revision 6 is the **Phase 2 freeze point**. Rev 7 is the **L1 surface review**. The v0 table now lives in `harness/lib/mutations.js` as a closed, non-executable catalog. Frozen architecture is not reopened. **Phase 3 is not opened and not authorized.** `dispatch.write` still does not exist. Mermaid diagrams are unchanged.
 
-**Status:** Rev 6 / Phase 2 Freeze remains the baseline. Rev 7 classifies a finite L1 set against the operation contract. The sole Phase 3 proof, when that phase opens, is: **even with `dispatch.write` fully available, Harness still cannot cross L1 → L2.**
+**Status:** Rev 6 / Phase 2 Freeze remains the baseline. Rev 7 classifies a finite L1 set and proves L2 is unrepresentable on that set. The sole Phase 3 proof, when that phase opens, is: **even with `dispatch.write` fully available, Harness still cannot cross L1 → L2.**
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -481,7 +481,7 @@ That is the sole focus of the next Phase 3 review. A write that needs privilege,
 
 L0 is Phase 1 (frozen). Session-log writes with session-level approval are Phase 2 (frozen). L1 is the v0 table in the L1 surface review. L2 is `dispatch.system` and always runs `snapshot → approval → execute → audit`. Informal candidates map onto that table as: theme switch → `theme.set`; notification → `notify.send`; session-level toggle → `toggle.*`; already-allowed launch → `launch.terminal` / `launch.browser` with empty argv; window/workspace move stays held until a typed Omarchy effector exists.
 
-The L1 table is **not authorized to implement**. Until a later revision opens Phase 3, `dispatch.write` and `dispatch.system` stay absent.
+The L1 table is encoded in `harness/lib/mutations.js` as a closed catalog. It is **not executable**. `dispatch.write` remains absent. Until a later revision opens Phase 3, `dispatch.write` and `dispatch.system` stay absent.
 
 Phase 3 entry criteria (all must already be true before any OS mutation exists):
 

@@ -24,5 +24,16 @@
     "session_resume",
     "session_reset",
     "approval_decide"
-  ]
+  ],
+  "l1": [
+    "theme.set",
+    "notify.send",
+    "toggle.nightlight",
+    "toggle.bar",
+    "toggle.idle",
+    "window.focus",
+    "launch.terminal",
+    "launch.browser"
+  ],
+  "write": false
 }

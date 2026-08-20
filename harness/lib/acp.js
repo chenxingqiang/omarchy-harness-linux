@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const mutations = require('./mutations')
 
 const PROFILE_PATH = path.resolve(__dirname, '../profile/omarchy.json')
 const READONLY_TOOLS = [
@@ -80,6 +81,7 @@ function createAcpSession(harness) {
       write: false,
       system: false,
       sessionWrite: true,
+      l1: mutations.l1Names(),
     })
   }
 

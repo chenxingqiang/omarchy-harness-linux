@@ -4,6 +4,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { createAcpSession, loadProfile } = require('./acp')
 const { createSessionStore } = require('./session')
+const mutations = require('./mutations')
 
 const HARNESS_ROOT = path.resolve(__dirname, '..')
 const INTEGRITY_PATH = path.join(HARNESS_ROOT, 'integrity.json')
@@ -102,6 +103,7 @@ function overlayFiles() {
     'host.js',
     'integrity.json',
     'lib/acp.js',
+    'lib/mutations.js',
     'lib/omarchy-harness.js',
     'lib/session.js',
     'profile/omarchy.json',
@@ -346,6 +348,9 @@ function createHarness(options = {}) {
       phase: integrity.phase,
       dispatch: 'readonly',
       session_write: true,
+      write: false,
+      l1_surface: 'catalog',
+      l1: mutations.l1Names(),
       clients: profile.clients,
       tools: profile.tools,
     }
@@ -385,7 +390,7 @@ function createHarness(options = {}) {
     }
   }
 
-  const acp = createAcpSession({ tools, prompt, store })
+  const acp = createAcpSession({ tools, prompt, store, mutations })
 
   return {
     acp,
@@ -394,6 +399,7 @@ function createHarness(options = {}) {
     dispatch,
     dumpConfig,
     log,
+    mutations,
     prompt,
     session,
     store,
@@ -416,6 +422,8 @@ function printDumpConfig(config) {
     'phase',
     'dispatch',
     'session_write',
+    'write',
+    'l1_surface',
   ]) {
     const value = config[key] == null ? '' : config[key]
     lines.push(`  ${key}: ${value}`)
@@ -530,6 +538,7 @@ module.exports = {
   createSessionLog,
   loadIntegrity,
   loadProfile,
+  mutations,
   normalizeRoute,
   overlayFiles,
   printDumpConfig,
