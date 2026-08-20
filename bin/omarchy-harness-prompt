@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# omarchy:summary=Record a Phase 1 observe-only Harness turn for the given prompt
+# omarchy:group=harness
+# omarchy:name=prompt
+# omarchy:args=<text>
+# omarchy:examples=omarchy harness prompt "what theme is active"
+
+if (($# == 0)); then
+  echo "Usage: omarchy harness prompt <text>" >&2
+  exit 2
+fi
+
+exec omarchy-harness-host prompt "$@"

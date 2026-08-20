@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# omarchy:summary=Run the Omarchy Harness host
+# omarchy:hidden=true
+# omarchy:args=<dump-config|prompt|tool|serve> [args...]
+
+set -euo pipefail
+
+resolve_harness_node() {
+  if [[ -n ${OMARCHY_HARNESS_NODE:-} ]]; then
+    if [[ -x $OMARCHY_HARNESS_NODE ]]; then
+      printf '%s\n' "$OMARCHY_HARNESS_NODE"
+      return
+    fi
+    echo "omarchy-harness-host: OMARCHY_HARNESS_NODE is not executable" >&2
+    exit 1
+  fi
+
+  if [[ -x /usr/lib/omarchy-harness/node/bin/node ]]; then
+    printf '%s\n' /usr/lib/omarchy-harness/node/bin/node
+    return
+  fi
+
+  # Packaged Omarchy must not fall through to PATH or mise Node.
+  if [[ ${OMARCHY_PATH:-/usr/share/omarchy} == /usr/share/omarchy ]]; then
+    echo "omarchy-harness-host: pinned Node runtime is missing at /usr/lib/omarchy-harness/node" >&2
+    exit 1
+  fi
+
+  if command -v node >/dev/null; then
+    command -v node
+    return
+  fi
+
+  echo "omarchy-harness-host: node is not available" >&2
+  exit 1
+}
+
+if [[ -z ${OMARCHY_PATH:-} ]]; then
+  echo "omarchy-harness-host: OMARCHY_PATH is unset" >&2
+  exit 1
+fi
+
+host_js="$OMARCHY_PATH/harness/host.js"
+if [[ ! -f $host_js ]]; then
+  echo "omarchy-harness-host: missing $host_js" >&2
+  exit 1
+fi
+
+node=$(resolve_harness_node)
+exec "$node" "$host_js" "$@"

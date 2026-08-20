@@ -1,0 +1,17 @@
+[Unit]
+Description=Omarchy Harness OS control plane
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+# Production runtime is package-owned. A checkout without the pinned Node
+# leaves the unit inert rather than falling through to mise or PATH.
+ConditionPathExists=/usr/lib/omarchy-harness/node/bin/node
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/omarchy-harness-host serve
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

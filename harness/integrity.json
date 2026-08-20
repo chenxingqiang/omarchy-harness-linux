@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "profile": "omarchy",
+  "phase": 1,
+  "dsh": {
+    "package": "@deepseek-ai/dsh",
+    "version": "0.1.0-rc.7",
+    "commit": null
+  },
+  "node": {
+    "major": 22,
+    "range": "^22.19.0 || >=24.0.0"
+  },
+  "overlay": "acp",
+  "approval": "acp",
+  "preset": "session"
+}

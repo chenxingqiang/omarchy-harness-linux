@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# omarchy:summary=Dump the booted Omarchy Harness profile and runtime provenance
+# omarchy:group=harness
+# omarchy:name=dump-config
+# omarchy:args=[--json]
+
+exec omarchy-harness-host dump-config "$@"
