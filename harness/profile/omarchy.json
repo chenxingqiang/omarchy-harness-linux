@@ -1,0 +1,21 @@
+{
+  "name": "omarchy",
+  "bundles": ["dsh-base", "dsh-omarchy"],
+  "dispatch": "readonly",
+  "clients": {
+    "overlay": "acp",
+    "cli": "acp",
+    "web": "acp-optional",
+    "menu": "data-plane",
+    "keybind": "data-plane",
+    "bar": "data-plane"
+  },
+  "tools": [
+    "omarchy_status",
+    "omarchy_commands",
+    "omarchy_windows",
+    "omarchy_theme_list",
+    "omarchy_font_list",
+    "omarchy_plugin_list"
+  ]
+}

@@ -1,6 +1,6 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 3. Rev 1 was the design-only draft. Rev 2 freezes the v1 decisions and Phase 1 as a read-only control plane. Rev 3 puts the architecture mainline — Control Plane, Data Plane, Session Log, Policy Boundary — on the front of this document.
+Revision 4. Rev 1 was the design-only draft. Rev 2 freezes the v1 decisions and Phase 1 as a read-only control plane. Rev 3 puts the architecture mainline on the front of this document. Rev 4 freezes the four architecture invariants below; the mermaid diagrams are unchanged.
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -188,6 +188,134 @@ flowchart TB
 
 Dispatch is the same choke point in both pictures, and it is **not** one function that later grows an allowlist: Phase 1 exposes `dispatch.readonly` only; Phase 2 adds `dispatch.write`; Phase 3 adds `dispatch.system`.
 
+## Frozen architecture invariants
+
+These four principles are the architecture mainline. Later phases add capability behind them. They are not reopened to grow a universal dispatcher, to event-source the whole desktop, or to let Harness call Linux except through Omarchy effectors.
+
+The recovery primitive is the **session**, not the process.
+
+```text
+                    ┌─────────────────────┐
+                    │        User         │
+                    └──────────┬──────────┘
+                               │
+                  Omarchy UI / ACP Clients
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   Session / ACP     │
+                    │   Event Stream      │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+             ┌────────────────────────────────┐
+             │      DeepSeek Harness          │
+             │        CONTROL PLANE           │
+             │                                │
+             │ Session / Agent / Typed Tools  │
+             └───────────────┬────────────────┘
+                             │
+                    Policy / Approval
+                             │
+                             ▼
+                 ┌──────────────────────┐
+                 │ Omarchy Dispatcher  │
+                 │ readonly / write /  │
+                 │ system              │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+             ┌────────────────────────────────┐
+             │       Omarchy Effectors        │
+             │          DATA PLANE             │
+             │                                │
+             │ CLI / IPC / Hyprland / pkexec │
+             │ snapshot / existing mechanisms │
+             └───────────────┬────────────────┘
+                             │
+                             ▼
+                 ┌──────────────────────┐
+                 │       Linux OS       │
+                 └──────────────────────┘
+
+
+                    ┌──────────────────┐
+                    │   Session Log    │
+                    │ Source of Truth  │
+                    │ Resume / Fork /  │
+                    │ Replay           │
+                    └──────────────────┘
+```
+
+Not `User → ACP → Harness` for every interaction. Only interactions that must become Harness session facts enter ACP:
+
+```text
+Menu / Keybind / StatusBar  →  Omarchy Data Plane
+                               (not forced into the Session Log)
+
+Overlay / omarchy harness / dsh web (debug)  →  ACP  →  Harness
+```
+
+The Session Log is the source of truth for the **agent control plane**, not for the entire Omarchy desktop.
+
+### 1. Control Plane
+
+```text
+DeepSeek Harness
+    ├── Session
+    ├── Agent
+    ├── Typed Tools
+    └── Skill / Policy
+```
+
+Owns intent, reasoning, tool choice, and session lifecycle. Does not replace Omarchy effectors.
+
+### 2. Data Plane
+
+```text
+Omarchy
+    ├── omarchy-*
+    ├── Quickshell / IPC
+    ├── Hyprland / hyprctl
+    ├── pkexec / PolicyKit
+    └── snapshot
+```
+
+Owns the actual desktop / OS effect. Harness reaches Linux only through these.
+
+### 3. Session Log
+
+Not an ordinary logfile. It is:
+
+```text
+Request + Tool Call + Tool Result + Approval
++ Model-visible Observation + Snapshot Reference
+```
+
+Resume, Fork, and Replay all derive from that stream.
+
+### 4. Policy Boundary
+
+Typed tools are classified before dispatch. The dispatcher itself is phase-gated. This does not change:
+
+```text
+             Typed Tool
+                 │
+                 ▼
+              Policy
+                 │
+       ┌─────────┼─────────┐
+       ▼         ▼         ▼
+   readonly     write     system
+      │          │          │
+    auto      session     approval
+    allow      policy      + privilege
+```
+
+Forbidden shape: a universal dispatcher whose safety depends on callers remembering not to hit a dangerous API. Phase 1 has `dispatch.readonly` only. `dispatch.write` and `dispatch.system` do not exist until their phases.
+
+Phase 1 proves one sentence: **Harness can observe Omarchy; it cannot change Omarchy.**
+
 ## Frozen v1 decisions
 
 These are normative. Phase 1 code follows them; they are not reopened while writing the host.
@@ -270,21 +398,7 @@ What ships (across phases; Phase 1 is the read-only subset below):
 - Desktop surfaces that speak ACP / `session/event`: a shell overlay for conversation and approval, plus `omarchy harness …` for headless turns.
 - Policy: observe freely, mutate the session with confirmation when it is hard to undo, mutate the system only through `ctx.approval` (over ACP) and the existing `sudo`/`pkexec` line.
 
-```text
- User / keybind / menu / bar / overlay / omarchy harness …
-                         │
-                         │  ACP  ·  ctx.commands  ·  session/event
-                         ▼
-              DeepSeek Harness  (profile: omarchy)
-         dsh-base  +  dsh-omarchy  +  user cordis.patch.yml
-     ctx.sessions  ctx.tools  ctx.approval  ctx.sandbox  ctx.skills
-                         │
-                         │  typed tools, not raw bash as the OS spine
-                         ▼
-              Omarchy effectors  (data plane)
-     bin/omarchy-*   omarchy-shell IPC   hyprctl
-     systemd --user  pkexec / sudo       notify / snapshot
-```
+The layering is the Architecture mainline above: Control Plane → typed tools → Policy Boundary → dispatcher → Data Plane, with the Session Log as source of truth. Native desktop paths that never summon a turn do not enter that log.
 
 The Harness log records **agent control-plane facts**, not the entire Linux desktop as an event-sourced database.
 
@@ -554,7 +668,7 @@ Lock the inversion, the seam list, the tool policy classes, the frozen v1 decisi
 
 ### Phase 1 — frozen minimum (this implementation)
 
-Prove: **Harness can turn "Omarchy current state" into typed, logged, resumable session facts without changing desktop behavior.**
+Prove: **Harness can observe Omarchy; it cannot change Omarchy.** Typed, logged, resumable session facts, no desktop mutation.
 
 ```text
 Phase 1

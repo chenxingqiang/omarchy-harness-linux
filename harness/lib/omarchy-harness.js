@@ -2,6 +2,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const { createAcpSession, loadProfile } = require('./acp')
 
 const HARNESS_ROOT = path.resolve(__dirname, '..')
 const INTEGRITY_PATH = path.join(HARNESS_ROOT, 'integrity.json')
@@ -99,7 +100,9 @@ function overlayFiles() {
   return [
     'host.js',
     'integrity.json',
+    'lib/acp.js',
     'lib/omarchy-harness.js',
+    'profile/omarchy.json',
   ]
 }
 
@@ -316,6 +319,7 @@ function createHarness(options = {}) {
   }
 
   function dumpConfig() {
+    const profile = loadProfile()
     return {
       profile: integrity.profile,
       dsh: integrity.dsh.version,
@@ -327,6 +331,8 @@ function createHarness(options = {}) {
       overlay: integrity.overlay,
       phase: integrity.phase,
       dispatch: 'readonly',
+      clients: profile.clients,
+      tools: profile.tools,
     }
   }
 
@@ -345,7 +351,10 @@ function createHarness(options = {}) {
     }
   }
 
+  const acp = createAcpSession({ tools, prompt })
+
   return {
+    acp,
     classifyRoute,
     commands,
     dispatch,
@@ -429,6 +438,7 @@ module.exports = {
   createHarness,
   createSessionLog,
   loadIntegrity,
+  loadProfile,
   normalizeRoute,
   overlayFiles,
   printDumpConfig,

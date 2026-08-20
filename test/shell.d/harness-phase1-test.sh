@@ -209,6 +209,40 @@ assertEqual(themes[0], 'Tokyo Night', 'omarchy_theme_list uses readonly theme li
 const commandHits = harness.tools.omarchy_commands({ query: 'theme' })
 assert(commandHits.some((entry) => entry.name === 'list'), 'omarchy_commands filters the catalog')
 assert(!commandHits.some((entry) => entry.hidden), 'omarchy_commands omits hidden commands')
+
+const init = harness.acp.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' })
+assertEqual(init.result.dispatch, 'readonly', 'ACP initialize advertises readonly dispatch')
+assertEqual(init.result.write, false, 'ACP initialize does not advertise write')
+assertEqual(init.result.system, false, 'ACP initialize does not advertise system')
+assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tool list has no write tools')
+assert(init.result.tools.includes('omarchy_status'), 'ACP tool list includes omarchy_status')
+
+const created = harness.acp.handle({ jsonrpc: '2.0', id: 2, method: 'session/new' })
+assertEqual(created.result.sessionId, 'omarchy-session', 'ACP session/new returns a session id')
+
+const writeCall = harness.acp.handle({
+  jsonrpc: '2.0',
+  id: 3,
+  method: 'tools/call',
+  params: { name: 'omarchy_theme_set', arguments: { theme: 'tokyo-night' } },
+})
+assertEqual(writeCall.error.message, 'WRITE_ROUTE_IMPOSSIBLE', 'ACP tools/call cannot invoke a write tool')
+
+const statusCall = harness.acp.handle({
+  jsonrpc: '2.0',
+  id: 4,
+  method: 'tools/call',
+  params: { name: 'omarchy_theme_list' },
+})
+assert(Array.isArray(statusCall.result.content), 'ACP tools/call runs a readonly tool')
+
+const profile = requireFromRoot('harness/lib/acp.js').loadProfile()
+assertEqual(profile.dispatch, 'readonly', 'omarchy profile is readonly')
+assertEqual(profile.clients.overlay, 'acp', 'overlay is an ACP client')
+assertEqual(profile.clients.cli, 'acp', 'harness CLI is an ACP client')
+assertEqual(profile.clients.menu, 'data-plane', 'menu stays on the data plane')
+assertEqual(profile.clients.keybind, 'data-plane', 'keybind stays on the data plane')
+assertEqual(profile.clients.bar, 'data-plane', 'status bar stays on the data plane')
 JS
 
 : >"$CALL_LOG"
@@ -229,7 +263,7 @@ dump=$("$ROOT/bin/omarchy-harness-dump-config")
 pass "dump-config prints runtime provenance"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
-echo "$dump_json" | jq -e '.profile == "omarchy" and .overlay == "acp" and .dispatch == "readonly"' >/dev/null
+echo "$dump_json" | jq -e '.profile == "omarchy" and .overlay == "acp" and .dispatch == "readonly" and .clients.menu == "data-plane" and .clients.overlay == "acp"' >/dev/null
 pass "dump-config --json is structured provenance"
 
 status=0

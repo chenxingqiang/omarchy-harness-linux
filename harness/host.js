@@ -2,6 +2,7 @@ const fs = require('fs')
 const net = require('net')
 const path = require('path')
 const { createHarness, runCli } = require('./lib/omarchy-harness')
+const { parseAcpLine } = require('./lib/acp')
 
 function defaultLogPath() {
   const home = process.env.HOME || '/tmp'
@@ -16,7 +17,7 @@ function socketPath() {
   return path.join(runtimeDir, 'omarchy-harness.sock')
 }
 
-function serve() {
+function serve(harness) {
   const sock = socketPath()
   if (!sock) {
     console.error('omarchy-harness-host: XDG_RUNTIME_DIR is unset')
@@ -30,13 +31,34 @@ function serve() {
   }
 
   const server = net.createServer((connection) => {
+    let buffer = ''
     connection.on('data', (chunk) => {
-      const line = String(chunk).trim()
-      if (line === 'ping') {
-        connection.end('ok\n')
-        return
+      buffer += String(chunk)
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) {
+          continue
+        }
+        if (trimmed === 'ping') {
+          connection.write('ok\n')
+          continue
+        }
+        try {
+          const parsed = parseAcpLine(trimmed)
+          const reply = harness.acp.handle(parsed.message)
+          connection.write(JSON.stringify(reply) + '\n')
+        } catch {
+          connection.write(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: null,
+              error: { code: -32700, message: 'parse error' },
+            }) + '\n'
+          )
+        }
       }
-      connection.end('unknown\n')
     })
   })
 
@@ -63,7 +85,7 @@ const harness = createHarness({ logPath: defaultLogPath() })
 const result = runCli(argv, { harness })
 
 if (result.serve) {
-  serve()
+  serve(harness)
 } else {
   if (result.stdout) {
     process.stdout.write(result.stdout)
