@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Frozen Session Control Plane MVP: session mutation is allowed; OS mutation is unreachable.
+
 set -euo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
