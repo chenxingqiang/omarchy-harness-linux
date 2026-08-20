@@ -2,7 +2,7 @@
 
 # omarchy:summary=Run the Omarchy Harness host
 # omarchy:hidden=true
-# omarchy:args=<dump-config|prompt|tool|serve> [args...]
+# omarchy:args=<dump-config|prompt|tool|session|approval|serve> [args...]
 
 set -euo pipefail
 

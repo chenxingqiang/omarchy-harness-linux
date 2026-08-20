@@ -10,9 +10,41 @@ const READONLY_TOOLS = [
   'omarchy_font_list',
   'omarchy_plugin_list',
 ]
+const SESSION_TOOLS = [
+  'session_metadata',
+  'session_checkpoint',
+  'session_fork',
+  'session_resume',
+  'session_reset',
+  'approval_decide',
+]
 
 function loadProfile() {
   return JSON.parse(fs.readFileSync(PROFILE_PATH, 'utf8'))
+}
+
+function callSessionTool(store, name, args) {
+  if (name === 'session_metadata') {
+    return store.write({ type: 'metadata', patch: { title: args.title || '' } })
+  }
+  if (name === 'session_checkpoint') {
+    return store.write({ type: 'checkpoint' })
+  }
+  if (name === 'session_fork') {
+    return store.fork()
+  }
+  if (name === 'session_resume') {
+    return store.resume(args.sessionId)
+  }
+  if (name === 'session_reset') {
+    return store.write({ type: 'reset' })
+  }
+  if (name === 'approval_decide') {
+    return store.decide(args.approvalId, args.decision)
+  }
+  const error = new Error('unknown session tool')
+  error.code = 'UNKNOWN_TOOL'
+  throw error
 }
 
 function jsonRpcResult(id, result) {
@@ -36,17 +68,18 @@ function createAcpSession(harness) {
       protocolVersion: 1,
       serverInfo: {
         name: 'omarchy-harness',
-        phase: 1,
+        phase: 2,
       },
       capabilities: {
-        loadSession: false,
+        loadSession: true,
         promptCapabilities: { image: false, audio: false, embeddedContext: false },
       },
       profile: profile.name,
       dispatch: 'readonly',
-      tools: READONLY_TOOLS.slice(),
+      tools: READONLY_TOOLS.concat(SESSION_TOOLS),
       write: false,
       system: false,
+      sessionWrite: true,
     })
   }
 
@@ -57,15 +90,24 @@ function createAcpSession(harness) {
 
   function toolsCall(id, params) {
     const name = params && params.name
-    if (!READONLY_TOOLS.includes(name)) {
-      return jsonRpcError(id, -32001, 'WRITE_ROUTE_IMPOSSIBLE', {
-        tool: name,
-        dispatch: 'readonly',
-      })
+    const args = params && params.arguments ? params.arguments : {}
+    if (READONLY_TOOLS.includes(name)) {
+      const tool = harness.tools[name]
+      const content = tool(args)
+      return jsonRpcResult(id, { content, isError: false })
     }
-    const tool = harness.tools[name]
-    const content = tool(params && params.arguments ? params.arguments : {})
-    return jsonRpcResult(id, { content, isError: false })
+    if (SESSION_TOOLS.includes(name) && harness.store) {
+      try {
+        const content = callSessionTool(harness.store, name, args)
+        return jsonRpcResult(id, { content, isError: false })
+      } catch (error) {
+        return jsonRpcError(id, -32003, error.code || error.message, { tool: name })
+      }
+    }
+    return jsonRpcError(id, -32001, 'WRITE_ROUTE_IMPOSSIBLE', {
+      tool: name,
+      dispatch: 'readonly',
+    })
   }
 
   function sessionPrompt(id, params) {
@@ -78,6 +120,14 @@ function createAcpSession(harness) {
         : (params && params.prompt) || (params && params.text) || ''
     const result = harness.prompt(String(text))
     return jsonRpcResult(id, result)
+  }
+
+  function storeCall(id, fn) {
+    try {
+      return jsonRpcResult(id, fn())
+    } catch (error) {
+      return jsonRpcError(id, -32003, error.code || error.message)
+    }
   }
 
   function handle(message) {
@@ -97,6 +147,23 @@ function createAcpSession(harness) {
     if (method === 'tools/call') {
       return toolsCall(id, params || {})
     }
+    if (method === 'session/checkpoint') {
+      return storeCall(id, () => harness.store.write({ type: 'checkpoint' }))
+    }
+    if (method === 'session/fork') {
+      return storeCall(id, () => harness.store.fork())
+    }
+    if (method === 'session/resume') {
+      return storeCall(id, () => harness.store.resume(params && params.sessionId))
+    }
+    if (method === 'session/state') {
+      return storeCall(id, () => harness.store.state())
+    }
+    if (method === 'approval/decide') {
+      return storeCall(id, () =>
+        harness.store.decide(params && params.approvalId, params && params.decision)
+      )
+    }
     if (method === 'ping') {
       return jsonRpcResult(id, { ok: true })
     }
@@ -106,7 +173,7 @@ function createAcpSession(harness) {
   return {
     handle,
     profile,
-    tools: READONLY_TOOLS,
+    tools: READONLY_TOOLS.concat(SESSION_TOOLS),
   }
 }
 
@@ -121,6 +188,7 @@ function parseAcpLine(line) {
 module.exports = {
   PROFILE_PATH,
   READONLY_TOOLS,
+  SESSION_TOOLS,
   createAcpSession,
   loadProfile,
   parseAcpLine,

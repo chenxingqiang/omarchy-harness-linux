@@ -3,6 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { createAcpSession, loadProfile } = require('./acp')
+const { createSessionStore } = require('./session')
 
 const HARNESS_ROOT = path.resolve(__dirname, '..')
 const INTEGRITY_PATH = path.join(HARNESS_ROOT, 'integrity.json')
@@ -102,6 +103,7 @@ function overlayFiles() {
     'integrity.json',
     'lib/acp.js',
     'lib/omarchy-harness.js',
+    'lib/session.js',
     'profile/omarchy.json',
   ]
 }
@@ -192,8 +194,19 @@ function createHarness(options = {}) {
   const hyprctl = options.hyprctl || ((args) => defaultHyprctl(args, env))
   const now = options.now || defaultNow
   const integrity = options.integrity || loadIntegrity()
+  const home = env.HOME || '/tmp'
+  const logPath =
+    options.logPath ||
+    path.join(home, '.local/state/omarchy/harness/sessions/current.jsonl')
+  const store = options.store || createSessionStore({
+    dir: path.dirname(logPath),
+    id: path.basename(logPath, '.jsonl'),
+    now,
+    newId: options.newId,
+    approvalTimeoutMs: options.approvalTimeoutMs,
+  })
   const log = createSessionLog({
-    logPath: options.logPath,
+    logPath,
     now,
   })
 
@@ -331,27 +344,47 @@ function createHarness(options = {}) {
       overlay: integrity.overlay,
       phase: integrity.phase,
       dispatch: 'readonly',
+      session_write: true,
       clients: profile.clients,
       tools: profile.tools,
     }
   }
 
   function prompt(text) {
-    log.append({ type: 'turn/start', phase: 1 })
+    store.append({ type: 'turn/start', phase: integrity.phase })
     const payload = session.snapshot()
-    const statusEvent = log.recordModelVisibleStatus(payload)
-    log.append({ type: 'user/message', text: String(text || '') })
-    log.append({ type: 'turn/end', reason: 'phase1-observe-only' })
+    const identity = snapshotIdentity(payload)
+    const listed = store.events()
+    let statusEvent = null
+    for (let index = listed.length - 1; index >= 0; index -= 1) {
+      const event = listed[index]
+      if (event.type === 'omarchy/status' && event.modelVisible) {
+        if (event.snapshot && event.snapshot.identity === identity) {
+          statusEvent = event
+        }
+        break
+      }
+    }
+    if (!statusEvent) {
+      statusEvent = store.append({
+        type: 'omarchy/status',
+        modelVisible: true,
+        snapshot: { identity, capturedAt: now(), version: 1 },
+        payload,
+      })
+    }
+    store.append({ type: 'user/message', text: String(text || '') })
+    store.append({ type: 'turn/end', reason: 'observe-only' })
     return {
       ok: true,
-      phase: 1,
+      phase: integrity.phase,
       modelVisible: true,
       snapshot: statusEvent.snapshot,
-      events: log.events.length,
+      events: store.events().length,
     }
   }
 
-  const acp = createAcpSession({ tools, prompt })
+  const acp = createAcpSession({ tools, prompt, store })
 
   return {
     acp,
@@ -362,6 +395,7 @@ function createHarness(options = {}) {
     log,
     prompt,
     session,
+    store,
     tools,
     windows,
   }
@@ -380,6 +414,7 @@ function printDumpConfig(config) {
     'overlay',
     'phase',
     'dispatch',
+    'session_write',
   ]) {
     const value = config[key] == null ? '' : config[key]
     lines.push(`  ${key}: ${value}`)
@@ -417,6 +452,61 @@ function runCli(argv, options = {}) {
     return { status: 0, stdout: JSON.stringify(payload, null, 2) + '\n' }
   }
 
+  if (command === 'session') {
+    const action = argv[1]
+    try {
+      if (action === 'state') {
+        return { status: 0, stdout: JSON.stringify(harness.store.state(), null, 2) + '\n' }
+      }
+      if (action === 'checkpoint') {
+        return { status: 0, stdout: JSON.stringify(harness.store.write({ type: 'checkpoint' }), null, 2) + '\n' }
+      }
+      if (action === 'metadata') {
+        const title = argv.slice(2).join(' ').trim()
+        return {
+          status: 0,
+          stdout: JSON.stringify(harness.store.write({ type: 'metadata', patch: { title } }), null, 2) + '\n',
+        }
+      }
+      if (action === 'reset') {
+        return { status: 0, stdout: JSON.stringify(harness.store.write({ type: 'reset' }), null, 2) + '\n' }
+      }
+      if (action === 'resume') {
+        const sessionId = argv[2]
+        if (!sessionId) {
+          return { status: 2, stdout: '', stderr: 'omarchy-harness-host: resume needs a session id\n' }
+        }
+        return { status: 0, stdout: JSON.stringify(harness.store.resume(sessionId), null, 2) + '\n' }
+      }
+      if (action === 'fork') {
+        return { status: 0, stdout: JSON.stringify(harness.store.fork(), null, 2) + '\n' }
+      }
+    } catch (error) {
+      return { status: 1, stdout: '', stderr: String(error.message) + '\n' }
+    }
+    return { status: 2, stdout: '', stderr: 'Usage: omarchy-harness-host session state|checkpoint|metadata|reset|resume|fork\n' }
+  }
+
+  if (command === 'approval') {
+    const action = argv[1]
+    try {
+      if (action === 'decide') {
+        const approvalId = argv[2]
+        const decision = argv[3]
+        if (!approvalId || !decision) {
+          return { status: 2, stdout: '', stderr: 'omarchy-harness-host: approval decide <id> allow|deny\n' }
+        }
+        return {
+          status: 0,
+          stdout: JSON.stringify(harness.store.decide(approvalId, decision), null, 2) + '\n',
+        }
+      }
+    } catch (error) {
+      return { status: 1, stdout: '', stderr: String(error.message) + '\n' }
+    }
+    return { status: 2, stdout: '', stderr: 'Usage: omarchy-harness-host approval decide <id> allow|deny\n' }
+  }
+
   if (command === 'serve') {
     return { status: 0, stdout: '', stderr: '', serve: true }
   }
@@ -424,7 +514,7 @@ function runCli(argv, options = {}) {
   return {
     status: 2,
     stdout: '',
-    stderr: 'Usage: omarchy-harness-host dump-config|prompt|tool|serve\n',
+    stderr: 'Usage: omarchy-harness-host dump-config|prompt|tool|session|approval|serve\n',
   }
 }
 

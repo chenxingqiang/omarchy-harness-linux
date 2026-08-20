@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Allow a pending Harness session approval
+# omarchy:group=harness
+# omarchy:name=approve
+# omarchy:args=<approval-id>
+
+if (($# == 0)); then
+  echo "Usage: omarchy harness approve <approval-id>" >&2
+  exit 2
+fi
+
+exec omarchy-harness-host approval decide "$1" allow

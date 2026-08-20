@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# omarchy:summary=Write a Harness session checkpoint
+# omarchy:group=harness
+# omarchy:name=checkpoint
+
+exec omarchy-harness-host session checkpoint "$@"

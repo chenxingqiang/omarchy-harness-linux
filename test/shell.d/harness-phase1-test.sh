@@ -200,8 +200,9 @@ for (const key of ['profile', 'dsh', 'dsh_commit', 'node', 'bundle_sha256', 'pre
 assertEqual(config.profile, 'omarchy', 'dump-config profile is omarchy')
 assertEqual(config.overlay, 'acp', 'dump-config overlay protocol is acp')
 assertEqual(config.approval, 'acp', 'dump-config approval protocol is acp')
+assertEqual(config.phase, 2, 'dump-config phase is 2')
 assertEqual(config.dispatch, 'readonly', 'dump-config dispatch is readonly')
-assertEqual(config.phase, 1, 'dump-config phase is 1')
+assertEqual(config.session_write, true, 'dump-config session_write is true')
 assert(String(config.bundle_sha256).length === 64, 'bundle hash is sha256 hex')
 
 const themes = harness.tools.omarchy_theme_list()
@@ -214,6 +215,7 @@ const init = harness.acp.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' })
 assertEqual(init.result.dispatch, 'readonly', 'ACP initialize advertises readonly dispatch')
 assertEqual(init.result.write, false, 'ACP initialize does not advertise write')
 assertEqual(init.result.system, false, 'ACP initialize does not advertise system')
+assertEqual(init.result.sessionWrite, true, 'ACP initialize advertises session write')
 assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tool list has no write tools')
 assert(init.result.tools.includes('omarchy_status'), 'ACP tool list includes omarchy_status')
 

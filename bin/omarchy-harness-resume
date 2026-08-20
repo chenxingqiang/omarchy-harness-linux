@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Resume a Harness session from its event log
+# omarchy:group=harness
+# omarchy:name=resume
+# omarchy:args=<session-id>
+
+if (($# == 0)); then
+  echo "Usage: omarchy harness resume <session-id>" >&2
+  exit 2
+fi
+
+exec omarchy-harness-host session resume "$@"

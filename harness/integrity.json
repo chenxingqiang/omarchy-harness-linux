@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "profile": "omarchy",
-  "phase": 1,
+  "phase": 2,
   "dsh": {
     "package": "@deepseek-ai/dsh",
     "version": "0.1.0-rc.7",

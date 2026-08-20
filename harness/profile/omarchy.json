@@ -2,6 +2,7 @@
   "name": "omarchy",
   "bundles": ["dsh-base", "dsh-omarchy"],
   "dispatch": "readonly",
+  "sessionWrite": true,
   "clients": {
     "overlay": "acp",
     "cli": "acp",
@@ -16,6 +17,12 @@
     "omarchy_windows",
     "omarchy_theme_list",
     "omarchy_font_list",
-    "omarchy_plugin_list"
+    "omarchy_plugin_list",
+    "session_metadata",
+    "session_checkpoint",
+    "session_fork",
+    "session_resume",
+    "session_reset",
+    "approval_decide"
   ]
 }

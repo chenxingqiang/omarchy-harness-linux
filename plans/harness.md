@@ -1,6 +1,6 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 4. Rev 1 was the design-only draft. Rev 2 freezes the v1 decisions and Phase 1 as a read-only control plane. Rev 3 puts the architecture mainline on the front of this document. Rev 4 freezes the four architecture invariants below; the mermaid diagrams are unchanged.
+Revision 5. Rev 4 froze the four architecture invariants. Rev 5 locks Phase 2: Harness may change the session; it still may not change the system. Mermaid diagrams are unchanged.
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -186,7 +186,7 @@ flowchart TB
     CP -.-> NOTDO
 ```
 
-Dispatch is the same choke point in both pictures, and it is **not** one function that later grows an allowlist: Phase 1 exposes `dispatch.readonly` only; Phase 2 adds `dispatch.write`; Phase 3 adds `dispatch.system`.
+Dispatch is the same choke point in both pictures, and it is **not** one function that later grows an allowlist. Phase 1 is observe-only. Phase 2 writes the Harness session (and runs approval against those writes). `dispatch.write` and `dispatch.system` stay absent until Phase 3, when Harness is first allowed to change the system.
 
 ## Frozen architecture invariants
 
@@ -312,9 +312,29 @@ Typed tools are classified before dispatch. The dispatcher itself is phase-gated
     allow      policy      + privilege
 ```
 
-Forbidden shape: a universal dispatcher whose safety depends on callers remembering not to hit a dangerous API. Phase 1 has `dispatch.readonly` only. `dispatch.write` and `dispatch.system` do not exist until their phases.
+Forbidden shape: a universal dispatcher whose safety depends on callers remembering not to hit a dangerous API. Phase 1–2 have `dispatch.readonly` only. `dispatch.write` and `dispatch.system` do not exist until Phase 3.
 
 Phase 1 proves one sentence: **Harness can observe Omarchy; it cannot change Omarchy.**
+
+Phase 2 proves one sentence: **Phase 2 only allows Harness to change Session; Phase 3 is when Harness may change System.** Session mutation and OS mutation are different risks. Approval in Phase 2 is the session-world protocol (request, decision, timeout/deny, fail-closed), not pkexec and not a desktop effector.
+
+```text
+Phase 1 Observe → Session Log → Phase 2 Session Write → Approval → Phase 3 System Write
+```
+
+```text
+Phase 2
+├── Session Write — append event, metadata, checkpoint, resume / fork
+├── Approval — request, decision, timeout / deny, fail-closed
+├── Overlay — ACP client, session state, approval UI
+└── Tests — write only affects session; deny means no mutation;
+            duplicate decide is idempotent; restart preserves decisions;
+            replay reproduces session state
+
+Not Phase 2: pkg / update, pkexec, /etc, /usr, system snapshot,
+generic shell, universal dispatcher, arbitrary Hyprland mutation,
+dispatch.write, dispatch.system.
+```
 
 ## Frozen v1 decisions
 
@@ -502,25 +522,27 @@ ctx.omarchy.session          READ     live desktop facts
 ctx.omarchy.commands         READ     omarchy commands --json, no hidden by default
 ctx.omarchy.dispatch.readonly         observe routes only
 
-Phase 2 adds:
-  ctx.omarchy.dispatch.write → session policy → approval (ACP) → privilege
+Phase 2 adds session write + approval (Harness session only).
+dispatch.write and dispatch.system still do not exist.
 
 Phase 3 adds:
+  ctx.omarchy.dispatch.write  → Omarchy data-plane mutation → approval (ACP)
   ctx.omarchy.dispatch.system → snapshot → approval (ACP) → privilege
 ```
 
-Phase 1 invariant: `dispatch.write` and `dispatch.system` **do not exist**. A write route is unrepresentable, not "representable but denied." Tests must prove a Phase 1 host cannot invoke any write route.
+Phase 1–2 invariant: `dispatch.write` and `dispatch.system` **do not exist**. A write route is unrepresentable, not "representable but denied."
 
 | Seam | Owns | Default provider | Phase |
 |---|---|---|---|
 | `ctx.omarchy.session` | live desktop facts: theme, outputs, workspaces, shell plugins, edition | local: CLI + `omarchy-shell` IPC | 1 (read) |
 | `ctx.omarchy.commands` | command catalog | `omarchy commands --json` | 1 (read) |
 | `ctx.omarchy.dispatch.readonly` | run one observe-class `omarchy` route | local subprocess as the user | 1 |
-| `ctx.omarchy.dispatch.write` | session-local mutations | local subprocess | 2 |
+| session write / approval | append, metadata, checkpoint, resume, fork, approval events | session log | 2 |
+| `ctx.omarchy.dispatch.write` | Omarchy data-plane mutations | local subprocess | 3 |
 | `ctx.omarchy.dispatch.system` | pkg / update / snapshot / power | local subprocess + privilege | 3 |
-| `ctx.omarchy.windows` | list (Phase 1); focus / move / close / launch (Phase 2) | Hyprland via existing helpers | 1 list / 2 mutate |
-| `ctx.omarchy.notify` | toasts and approval cards | `omarchy-notification-send` + shell IPC | 2 |
-| `ctx.omarchy.privilege` | decide `sudo` vs `pkexec` vs deny | TTY detection + the Omarchy skill's rule | 2 |
+| `ctx.omarchy.windows` | list (Phase 1); focus / move / close / launch (Phase 3) | Hyprland via existing helpers | 1 list / 3 mutate |
+| `ctx.omarchy.notify` | toasts and OS approval cards | `omarchy-notification-send` + shell IPC | 3 |
+| `ctx.omarchy.privilege` | decide `sudo` vs `pkexec` vs deny | TTY detection + the Omarchy skill's rule | 3 |
 | `ctx.omarchy.snapshot` | create / list / restore system snapshots | existing snapshot commands | 3 |
 
 What is *not* a new seam in v1: pacman, NetworkManager, PipeWire, GTK. Those stay behind `omarchy pkg`, `omarchy wifi`, `omarchy audio`, and friends.
@@ -538,7 +560,7 @@ Discovery source: `omarchy commands --json` (binary, route, summary, args, alias
 - `omarchy_windows` — clients, workspaces, focused window
 - `omarchy_theme_list` / `omarchy_font_list` / `omarchy_plugin_list`
 
-**Act, session-local** (Phase 2; permission preset `session`):
+**Act, Omarchy data-plane** (Phase 3; not Linux-package system writes):
 
 - `omarchy_theme_set`, `omarchy_font_set`, `omarchy_background_set`
 - `omarchy_launch`, `omarchy_capture`, `omarchy_notify`
@@ -712,15 +734,39 @@ Tests
 
 **Do not in Phase 1:** overlay, approval UI, package/update/snapshot, remote provider, `dispatch.write`, `omarchy_cli`, first-run enable, network install of `dsh`.
 
-### Phase 2 — session-local writes and approval
+### Phase 2 — session write and approval (Linux untouched)
 
-- `dispatch.write`, session tools, ACP approval cards, overlay v1, permission presets. Default stored preset `session`.
-- Visual verification of overlay, approval card, and theme-set roundtrip per `agents/skills/visual-verification.md`.
-- Side-channel for approval is still forbidden unless ACP is proven insufficient, and that proof updates this document.
+```text
+Phase 2
+├── Session Write
+│   ├── append event
+│   ├── update session metadata
+│   ├── checkpoint
+│   └── resume / fork semantics
+├── Approval
+│   ├── approval request event
+│   ├── approval decision event
+│   ├── timeout / deny
+│   └── fail-closed
+├── Overlay
+│   ├── approval UI
+│   ├── session state
+│   └── ACP client
+└── Tests
+    ├── write only affects session
+    ├── denied approval => no mutation
+    ├── duplicate approval is idempotent
+    ├── restart preserves decision state
+    └── replay reproduces session state
+```
+
+`dispatch.write` is still absent. Overlay, approval, and session resume/fork do not call Omarchy effectors, pkexec, or Hyprland mutate paths.
+
+The overlay is an ACP/host client: it reads `session state` and posts allow/deny through `omarchy-harness-host` one-shot commands, so it works while the user unit stays opt-in. If the host binary cannot answer, the overlay shows an error and leaves the desktop unchanged.
 
 ### Phase 3 — system writes
 
-- `dispatch.system`: pkg, update, snapshot, power. Snapshot-before-update. `pkexec` path with no TTY.
+- First appearance of `dispatch.write` (Omarchy data-plane mutation) and `dispatch.system` (pkg / update / snapshot / power). Snapshot-before-update. `pkexec` path with no TTY.
 - Crash-diagnosis path that can target the OS preset.
 - Subagent: OS preset may spawn the user's default coding CLI into `~/Work` without giving that child the system tool catalog.
 
@@ -746,11 +792,14 @@ Automated tests stay in this repo's existing runners. Graphical checks follow th
 | user unit inactive | CLI | 1 | `omarchy harness status` nonzero; desktop otherwise healthy |
 | prompt with host down / no unit | CLI | 1 | still logs observe facts via one-shot host; no desktop mutation |
 | overlay summons when host down | shell test | 2 | error state, no hang |
-| session tool under preset `observe` | overlay unit | 2 | `tools/pre-execute` deny |
-| system tool without approval responder | overlay unit | 2/3 | fail closed |
-| privilege TTY / no TTY | overlay unit | 2 | `sudo` / `pkexec` |
-| approval card punches DND | shell test | 2 | `app_name` is `omarchy-action` |
-| visual: overlay + theme change + approval | running UI / acceptance VM | 2 | see visual-verification skill |
+| session write does not exec omarchy/hyprctl | overlay unit | 2 | fake dispatcher unused |
+| denied approval | overlay unit | 2 | mutation absent from reduced state |
+| duplicate approval | overlay unit | 2 | first decision wins; second is idempotent |
+| restart / replay | overlay unit | 2 | pending and decided approvals reconstructed from the log |
+| approval timeout | overlay unit | 2 | fail-closed deny, no mutation |
+| `dispatch.write` / `dispatch.system` | overlay unit | 2 | still absent |
+| overlay QML is an ACP client | shell test | 2 | open/close, approve/deny call the host |
+| visual: overlay + approval card | running UI | 2 | visual-verification skill when a compositor is present |
 
 Do not run graphical acceptance in `./test/all`. Host tests must not require a live compositor; provider fakes are the seam's purpose.
 
