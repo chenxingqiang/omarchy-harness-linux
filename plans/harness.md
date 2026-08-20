@@ -2,7 +2,7 @@
 
 Revision 6 is the **Phase 2 freeze point**. Rev 4 froze the four architecture invariants. Rev 5 implemented Phase 2 session write. Rev 6 freezes Phase 1+2 as the Session Control Plane MVP and locks how later reviews work. **Phase 3 is not opened.** It is a new security boundary, not Phase 2 privilege expansion. Mermaid diagrams are unchanged. No OS mutation is added here.
 
-**Status:** Rev 6 / Phase 2 frozen. Phase 3 unopened. Next architecture review: the minimum typed mutation surface for `dispatch.write`, not the dispatcher itself.
+**Status:** Rev 6 / Phase 2 Freeze is the baseline for later reviews. Frozen architecture (Control Plane, Data Plane, Session Log, Overlay as ACP client) is not reopened. Phase 3 is unopened. The only next review is L0 → L1 → L2 classification, and the sole proof for Phase 3 is: **even with `dispatch.write` fully available, Harness still cannot cross L1 → L2.**
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -376,7 +376,7 @@ Three properties of that freeze stay locked:
 
 Not Phase 2, and not a late addition to this MVP: pkg / update, pkexec, `/etc`, `/usr`, system snapshot, generic shell, universal dispatcher, arbitrary Hyprland mutation, `dispatch.write`, `dispatch.system`.
 
-Subsequent reviews, from this freeze forward, keep these three architecture invariants:
+Subsequent reviews, from this freeze forward, do **not** reopen Control Plane / Data Plane / Session Log / Overlay. They keep these three architecture invariants:
 
 ```text
 1. Session mutation ≠ OS mutation
@@ -417,7 +417,27 @@ System Write
 
 ### Mutation classes (Phase 3 first cut: classify, do not catalog)
 
-Phase 3 is a new security boundary. Do not start it by listing twenty tools. First classify every future mutation by risk so `dispatch.write` cannot become a universal entry.
+Phase 3 is a new security boundary. Do not start it by listing twenty tools, and do not reopen the frozen architecture. The only review ladder is:
+
+```text
+L0 Observe
+   ↓
+L1 typed desktop mutation
+   ↓
+L2 system mutation
+```
+
+L1 is a **finite capability set**, not a permission switch on the dispatcher:
+
+```text
+dispatch.write
+    ≠ arbitrary write
+    ≠ shell
+    ≠ generic IPC
+
+dispatch.write
+    = finite, typed, capability-scoped operations
+```
 
 ```text
 L0  Observe
@@ -425,9 +445,11 @@ L0  Observe
     no approval
 
 L1  Session-safe / reversible desktop write
+    finite typed operations
     approval policy optional
     no privilege
     no system package/config mutation
+    cannot reach L2
 
 L2  System mutation
     snapshot
@@ -436,17 +458,26 @@ L2  System mutation
     explicit audit event
 ```
 
-Every future tool must answer:
+Every candidate operation is reviewed against one contract:
 
 ```text
-Tool
- ├─ changes what?
- ├─ reversible?
- ├─ requires privilege?
- ├─ affects session only / desktop / system?
- ├─ snapshot required?
- └─ approval required?
+operation
+├── target
+├── mutation semantics
+├── reversibility
+├── privilege
+├── scope: session | desktop | system
+├── snapshot requirement
+├── approval requirement
+├── audit event
+└── replay semantics
 ```
+
+The Phase 3 review does not prove "can it execute?" It proves one sentence:
+
+> **Even when `dispatch.write` is fully available, Harness still cannot cross the L1 → L2 security boundary.**
+
+That is the sole focus of the next Phase 3 review. A write that needs privilege, snapshot, `/etc`, `/usr`, packages, services, firmware, reboot, or a shell is L2, and `dispatch.write` must be unable to represent it.
 
 L0 is Phase 1 (frozen). Session-log writes with session-level approval are Phase 2 (frozen). L1 is the first candidate class for `dispatch.write` when Phase 3 opens. L2 is `dispatch.system` and always runs `snapshot → approval → execute → audit`.
 
@@ -926,7 +957,7 @@ The overlay is an ACP/host client: it reads `session state` and posts allow/deny
 
 Phase 3 is not opened in this revision. It is not a continuation of Phase 2 privilege. It is the first OS-side-effect release gate, and only after the Phase 3 entry criteria above are already true.
 
-The first cut classifies mutations (L0 / L1 / L2) and then reviews the minimum typed L1 surface for `dispatch.write`. It does not grow a generic dispatcher. L2 stays behind `snapshot → approval → execute → audit`.
+The first cut classifies mutations (L0 / L1 / L2). L1 is a finite typed capability set, not a dispatcher permission switch. The sole Phase 3 proof is that a fully available `dispatch.write` still cannot cross L1 → L2. L2 stays behind `snapshot → approval → execute → audit`.
 
 Until that review approves a typed subset, `dispatch.write` and `dispatch.system` stay absent. Crash-diagnosis against an OS preset, and spawning a coding CLI into `~/Work` without the system catalog, wait on the same boundary.
 
@@ -960,6 +991,7 @@ Automated tests stay in this repo's existing runners. Graphical checks follow th
 | `dispatch.write` / `dispatch.system` | overlay unit | 2 | still absent |
 | overlay QML is an ACP client | shell test | 2 | open/close, approve/deny call the host |
 | visual: overlay + approval card | running UI | 2 | visual-verification skill when a compositor is present |
+| `dispatch.write` cannot represent an L2 operation | overlay unit | 3 | pkg/update/shell/`/etc` remain unrepresentable after L1 exists |
 
 Do not run graphical acceptance in `./test/all`. Host tests must not require a live compositor; provider fakes are the seam's purpose.
 
@@ -967,7 +999,7 @@ Do not run graphical acceptance in `./test/all`. Host tests must not require a l
 
 Decided in Rev 2: Node shipping, prebundled `node_modules`, ACP-first, manual `dsh` bump. See Frozen v1 decisions.
 
-Still open (not the Session Control Plane MVP; wait for a Phase 3 L1 mutation-surface review, not a dispatcher redesign):
+Still open (not the Session Control Plane MVP; wait for a Phase 3 L1 mutation-surface review against the operation contract. Do not reopen Control Plane / Data Plane / Session Log / Overlay):
 
 1. **Multi-user**: each graphical user has their own user unit and `$DSH_HOME`. Root never runs the host. Is a system-wide Harness (for the Server plan's sysop) a different profile, or out of scope forever?
 2. **Local models**: Ollama / LM Studio already exist in the menu. Should `ctx.llm` default to a local OpenAI-compatible endpoint when one is up, or stay cloud-first with DeepSeek's adapter? Phase 1 has no model turn.
@@ -988,3 +1020,5 @@ Still open (not the Session Control Plane MVP; wait for a Phase 3 L1 mutation-su
 - Treating Phase 3 as a widening of Phase 2 instead of a new security boundary
 - Opening Phase 3 by enumerating twenty tools instead of classifying L0 / L1 / L2
 - Growing a generic `dispatch.write` that later tools opt into
+- Treating `dispatch.write` as arbitrary write, shell, or generic IPC
+- Reopening Control Plane / Data Plane / Session Log / Overlay during a Phase 3 review
