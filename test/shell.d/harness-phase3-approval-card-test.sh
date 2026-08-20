@@ -130,7 +130,8 @@ const parsed = view.parseHostState(JSON.stringify({
   },
 }))
 assertEqual(parsed.pending[0].summary, 'Install package: htop', 'overlay view surfaces the host summary')
-assertEqual(parsed.statusText, '1 pending approval(s)', 'overlay still counts pending approvals')
+assertEqual(parsed.pending[0].kind, 'system', 'overlay view classifies L2 as system')
+assertEqual(parsed.statusText, '1 system approval pending', 'overlay status names the pending plane')
 JS
 
 : >"$CALL_LOG"

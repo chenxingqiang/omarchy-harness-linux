@@ -1,16 +1,49 @@
-function pendingApprovals(state) {
-  if (!state || !state.pending) {
-    return []
+function pendingKind(mutation) {
+  if (!mutation || typeof mutation !== 'object') {
+    return 'unknown'
   }
-  return Object.keys(state.pending).map(function (id) {
-    const item = state.pending[id]
-    const mutation = item && item.mutation
-    return {
-      approvalId: item.approvalId || id,
-      mutation: mutation,
-      summary: (mutation && mutation.summary) || pendingSummary(mutation),
-    }
-  })
+  if (mutation.type === 'reset') {
+    return 'session'
+  }
+  if (mutation.type === 'l1') {
+    return 'desktop'
+  }
+  if (mutation.type === 'l2') {
+    return 'system'
+  }
+  return 'unknown'
+}
+
+function pendingBadge(kind) {
+  if (kind === 'session') {
+    return 'Session'
+  }
+  if (kind === 'desktop') {
+    return 'Desktop'
+  }
+  if (kind === 'system') {
+    return 'System'
+  }
+  return 'Pending'
+}
+
+function pendingTone(kind) {
+  if (kind === 'system') {
+    return 'urgent'
+  }
+  if (kind === 'desktop') {
+    return 'accent'
+  }
+  return 'muted'
+}
+
+function snapshotFirst(mutation) {
+  return Boolean(
+    mutation &&
+    mutation.type === 'l2' &&
+    mutation.snapshot &&
+    Number(mutation.snapshot.status) === 0
+  )
 }
 
 function pendingSummary(mutation) {
@@ -38,6 +71,79 @@ function pendingSummary(mutation) {
   return 'Pending approval'
 }
 
+function pendingHint(mutation) {
+  const kind = pendingKind(mutation)
+  if (kind === 'session') {
+    return 'Session only. The desktop and Linux stay unchanged.'
+  }
+  if (kind === 'desktop') {
+    return 'Desktop change. Package, update, and power paths stay closed.'
+  }
+  if (kind === 'system') {
+    if (snapshotFirst(mutation)) {
+      return 'Snapshot taken before this request. Allow executes the system change.'
+    }
+    return 'System change. Allow executes on the machine.'
+  }
+  return 'Pending approval'
+}
+
+function pendingCard(id, item) {
+  const mutation = item && item.mutation
+  const kind = pendingKind(mutation)
+  return {
+    approvalId: (item && item.approvalId) || id,
+    mutation: mutation,
+    kind: kind,
+    badge: pendingBadge(kind),
+    tone: pendingTone(kind),
+    snapshotFirst: snapshotFirst(mutation),
+    summary: pendingSummary(mutation),
+    hint: pendingHint(mutation),
+  }
+}
+
+function pendingApprovals(state) {
+  if (!state || !state.pending) {
+    return []
+  }
+  return Object.keys(state.pending).map(function (id) {
+    return pendingCard(id, state.pending[id])
+  })
+}
+
+function statusTextFor(pending) {
+  if (!pending.length) {
+    return 'No pending approvals'
+  }
+  if (pending.length === 1) {
+    return '1 ' + pending[0].kind + ' approval pending'
+  }
+  const counts = { session: 0, desktop: 0, system: 0, unknown: 0 }
+  for (let i = 0; i < pending.length; i++) {
+    const kind = pending[i].kind
+    counts[kind] = (counts[kind] || 0) + 1
+  }
+  const parts = []
+  if (counts.system) {
+    parts.push(counts.system + ' system')
+  }
+  if (counts.desktop) {
+    parts.push(counts.desktop + ' desktop')
+  }
+  if (counts.session) {
+    parts.push(counts.session + ' session')
+  }
+  if (counts.unknown) {
+    parts.push(counts.unknown + ' other')
+  }
+  return pending.length + ' pending approvals: ' + parts.join(', ')
+}
+
+function keyboardHint() {
+  return 'Y allow · N deny · Esc close · R refresh'
+}
+
 function title(state) {
   if (state && state.metadata && state.metadata.title) {
     return state.metadata.title
@@ -57,6 +163,7 @@ function parseHostState(text) {
       pending: [],
       title: 'Untitled session',
       statusText: hostDownMessage(),
+      keyboardHint: keyboardHint(),
     }
   }
   try {
@@ -67,6 +174,7 @@ function parseHostState(text) {
         pending: [],
         title: 'Untitled session',
         statusText: hostDownMessage(),
+        keyboardHint: keyboardHint(),
       }
     }
     const pending = pendingApprovals(state)
@@ -74,9 +182,8 @@ function parseHostState(text) {
       hostDown: false,
       pending: pending,
       title: title(state),
-      statusText: pending.length
-        ? pending.length + ' pending approval(s)'
-        : 'No pending approvals',
+      statusText: statusTextFor(pending),
+      keyboardHint: keyboardHint(),
     }
   } catch (error) {
     return {
@@ -84,6 +191,7 @@ function parseHostState(text) {
       pending: [],
       title: 'Untitled session',
       statusText: hostDownMessage(),
+      keyboardHint: keyboardHint(),
     }
   }
 }
@@ -91,9 +199,17 @@ function parseHostState(text) {
 if (typeof module !== 'undefined') {
   module.exports = {
     hostDownMessage,
+    keyboardHint,
     parseHostState,
     pendingApprovals,
+    pendingBadge,
+    pendingCard,
+    pendingHint,
+    pendingKind,
     pendingSummary,
+    pendingTone,
+    snapshotFirst,
+    statusTextFor,
     title,
   }
 }
