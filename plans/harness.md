@@ -1,6 +1,192 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 2. Rev 1 was the design-only draft. Rev 2 freezes the v1 decisions from design review and narrows Phase 1 to a read-only control plane.
+Revision 3. Rev 1 was the design-only draft. Rev 2 freezes the v1 decisions and Phase 1 as a read-only control plane. Rev 3 puts the architecture mainline — Control Plane, Data Plane, Session Log, Policy Boundary — on the front of this document.
+
+**Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
+
+```text
+                    Session Log
+                   /     |      \
+                  /      |       \
+             Resume     Fork    Replay
+                  \      |       /
+                   \     |      /
+                 DeepSeek Harness
+                        │
+                   Typed Tools
+                        │
+                  Policy / Approval
+                        │
+                  Omarchy Dispatcher
+                        │
+                  Omarchy Data Plane
+```
+
+## Architecture
+
+Four concepts, not a module inventory: **Control Plane**, **Data Plane**, **Session Log**, **Policy Boundary**.
+
+The compact map of that mainline:
+
+```mermaid
+flowchart LR
+
+    U["User"] --> UI["Omarchy UI<br/>Menu / Keybind / Overlay / CLI"]
+
+    UI --> ACP["ACP<br/>Session / Event"]
+
+    ACP --> H["DeepSeek Harness<br/>Control Plane"]
+
+    H --> T["Typed Tools<br/>ctx.omarchy.*"]
+
+    T --> P["Policy / Approval<br/>observe / session / system / privilege"]
+
+    P --> D["Omarchy Dispatcher<br/>readonly | write | system"]
+
+    D --> E["Omarchy Effectors<br/>Data Plane"]
+
+    E --> L["Linux / Hyprland / DBus<br/>Filesystem / Package / Hardware"]
+
+    H --> LOG["Session Log<br/>Source of Truth"]
+    D --> LOG
+    P --> LOG
+    E --> LOG
+
+    LOG --> R["Resume / Fork / Replay"]
+    R --> H
+
+    classDef control fill:#e8f0ff,stroke:#3674d9,stroke-width:2px;
+    classDef data fill:#eaf7ea,stroke:#3b8c4a,stroke-width:2px;
+    classDef log fill:#fff4df,stroke:#d98b00,stroke-width:2px;
+    classDef policy fill:#fff0f0,stroke:#c94b4b,stroke-width:2px;
+
+    class H,T control;
+    class E,L data;
+    class LOG,R log;
+    class P policy;
+```
+
+Native Menu / Keybind / Bar may act on the Data Plane directly. Those effects are not Harness facts. Overlay, `omarchy harness` CLI, and (optional) `dsh web` are ACP clients of the same session. A keybind only enters this diagram when it summons a turn or a Harness surface.
+
+The engineering view of the same four concepts:
+
+```mermaid
+flowchart TB
+
+    subgraph UI["User / clients — one session when they talk to the agent"]
+        Overlay["Quickshell Overlay<br/>primary conversation"]
+        CLI["omarchy harness CLI"]
+        Web["dsh web<br/>debug, default off"]
+        Native["Menu / Keybind / Bar<br/>native desktop"]
+    end
+
+    ACP["ACP · Session / Event Stream<br/>the only client protocol and fact stream"]
+
+    Overlay --> ACP
+    CLI --> ACP
+    Web -.-> ACP
+    Native -.-> ACP
+
+    subgraph CP["DeepSeek Harness (profile: omarchy) — CONTROL PLANE"]
+        Session["Session Core<br/>New / Resume / Fork / Replay<br/>append-only event log<br/>context snapshot"]
+        Agent["Agent / Model Runtime<br/>plan, skill, tool call"]
+        Tools["Typed Tools<br/>ctx.omarchy.session<br/>ctx.omarchy.commands<br/>ctx.omarchy.dispatch<br/>ctx.omarchy.windows<br/>ctx.omarchy.notify<br/>ctx.omarchy.privilege<br/>ctx.omarchy.snapshot"]
+    end
+
+    ACP <--> Session
+    Session <--> Agent
+    Agent <--> Tools
+
+    subgraph POLICY["Policy / Approval Boundary"]
+        Observe["Observe — auto-allow"]
+        SessionWrite["Session-level change — default allow"]
+        SystemChange["System-level change — must approve"]
+        Privilege["Privilege — pkexec / PolicyKit"]
+        Snapshot["Snapshot required before update"]
+    end
+
+    Tools --> Observe
+    Tools --> SessionWrite
+    Tools --> SystemChange
+    SystemChange --> Snapshot
+    SystemChange --> Privilege
+
+    subgraph SKILL["Skill / Policy Layer"]
+        DefaultSkills["default/agents/skills/omarchy"]
+        SkillPolicy["Executable policy<br/>sudo / pkexec, safe routes, forbidden paths"]
+    end
+
+    DefaultSkills --> SkillPolicy
+    SkillPolicy --> Agent
+    SkillPolicy --> POLICY
+
+    subgraph DISPATCH["Omarchy Dispatcher — typed, phase-gated"]
+        Route["Route / capability discovery"]
+        Validate["Validate type / args / capability"]
+        Approve["Approval hook (ACP)"]
+        Execute["Execute"]
+        Result["Typed result"]
+    end
+
+    Tools --> Route
+    Route --> Validate
+    Validate --> Approve
+    Approve --> Execute
+    Execute --> Result
+    Result --> Tools
+    POLICY --> Approve
+
+    subgraph DP["Omarchy Effectors — DATA PLANE"]
+        OmarchyCLI["omarchy-* CLI<br/>theme / font / plugin / launch / toggle / notify"]
+        ShellIPC["omarchy-shell IPC"]
+        Hypr["Hyprland / hyprctl"]
+        Pkexec["pkexec / PolicyKit"]
+        Snap["Snapshot / backup"]
+    end
+
+    Execute --> OmarchyCLI
+    Execute --> ShellIPC
+    Execute --> Hypr
+    Execute --> Pkexec
+    Execute --> Snap
+
+    OS["Linux OS / systemd / DBus / filesystem / package manager / hardware"]
+
+    OmarchyCLI --> OS
+    ShellIPC --> OS
+    Hypr --> OS
+    Pkexec --> OS
+    Snap --> OS
+
+    subgraph LOG["Session Log — Source of Truth"]
+        Events["Append-only events<br/>user request, tool call/result,<br/>model-visible observation,<br/>approval, snapshot identity"]
+        Replay["Resume / Fork / Replay"]
+    end
+
+    Session --> Events
+    Tools --> Events
+    Approve --> Events
+    Result --> Events
+    Events --> Replay
+    Replay --> Session
+
+    Service["omarchy-harness.service<br/>systemd --user · graphical-session.target<br/>not root · not a boot dependency"]
+    Service --> CP
+
+    subgraph NOTDO["Not this"]
+        N1["No new kernel"]
+        N2["No fork of deepseek-harness"]
+        N3["MCP is not the OS spine"]
+        N4["raw bash is not the OS API"]
+        N5["No auto-approve of system change"]
+        N6["Never edit /usr/share/omarchy/"]
+        N7["Harness is not a boot hard dependency"]
+    end
+
+    CP -.-> NOTDO
+```
+
+Dispatch is the same choke point in both pictures, and it is **not** one function that later grows an allowlist: Phase 1 exposes `dispatch.readonly` only; Phase 2 adds `dispatch.write`; Phase 3 adds `dispatch.system`.
 
 ## Frozen v1 decisions
 

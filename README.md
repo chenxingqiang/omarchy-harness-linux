@@ -2,6 +2,38 @@
 
 Omarchy is a beautiful, modern & opinionated Linux distribution by DHH.
 
+This tree additionally treats [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as the session **Control Plane**: the user still operates Omarchy; AI action reaches Linux only through typed tools, policy, and Omarchy effectors (the **Data Plane**); agent-caused facts live in one **Session Log**. The design is [`plans/harness.md`](plans/harness.md).
+
+```mermaid
+flowchart LR
+
+    U["User"] --> UI["Omarchy UI"]
+    UI --> ACP["ACP"]
+    ACP --> H["DeepSeek Harness<br/>Control Plane"]
+    H --> T["Typed Tools"]
+    T --> P["Policy / Approval"]
+    P --> D["Omarchy Dispatcher"]
+    D --> E["Omarchy Effectors<br/>Data Plane"]
+    E --> L["Linux"]
+
+    H --> LOG["Session Log<br/>Source of Truth"]
+    D --> LOG
+    P --> LOG
+    E --> LOG
+    LOG --> R["Resume / Fork / Replay"]
+    R --> H
+
+    classDef control fill:#e8f0ff,stroke:#3674d9,stroke-width:2px;
+    classDef data fill:#eaf7ea,stroke:#3b8c4a,stroke-width:2px;
+    classDef log fill:#fff4df,stroke:#d98b00,stroke-width:2px;
+    classDef policy fill:#fff0f0,stroke:#c94b4b,stroke-width:2px;
+
+    class H,T control;
+    class E,L data;
+    class LOG,R log;
+    class P policy;
+```
+
 Read more at [omarchy.org](https://omarchy.org).
 
 ## The Omarchy Manual
