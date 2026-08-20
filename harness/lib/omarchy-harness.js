@@ -254,9 +254,86 @@ function createHarness(options = {}) {
     return runL1(name, args)
   }
 
+  function privilegeFor(spec) {
+    if (!spec || spec.privilege === 'none') {
+      return { path: 'none', wrapped: false }
+    }
+    return { path: 'unwrapped', wrapped: false, alreadyElevates: true }
+  }
+
+  function runL2(name, args = {}) {
+    const spec = mutations.systemContract(name)
+    const argv = mutations.argvForSystem(name, args)
+    const privilege = privilegeFor(spec)
+    const result = exec(argv)
+    const status = result.status == null ? 1 : result.status
+    store.append({
+      type: spec.auditEvent,
+      op: name,
+      args,
+      argv,
+      privilege,
+      status,
+    })
+    return {
+      ok: status === 0,
+      status,
+      stdout: result.stdout || '',
+      stderr: result.stderr || '',
+      privilege,
+    }
+  }
+
+  function systemOp(name, args = {}) {
+    const spec = mutations.systemContract(name)
+    if (!spec) {
+      const error = new Error('L2_UNREPRESENTABLE')
+      error.code = 'L2_UNREPRESENTABLE'
+      error.op = name
+      throw error
+    }
+    const validated = mutations.validateSystemArgs(name, args)
+    if (!validated.ok) {
+      const error = new Error(validated.code)
+      error.code = validated.code
+      error.fields = validated.fields
+      throw error
+    }
+    mutations.argvForSystem(name, args)
+    let snapshot = null
+    if (spec.snapshot) {
+      const snap = exec(['omarchy', 'snapshot', 'create'])
+      snapshot = { status: snap.status == null ? 1 : snap.status }
+      store.append({
+        type: 'omarchy/snapshot',
+        op: 'snapshot.create',
+        stage: 'preflight',
+        for: name,
+        status: snapshot.status,
+      })
+      if (snapshot.status !== 0) {
+        const error = new Error('SNAPSHOT_FAILED')
+        error.code = 'SNAPSHOT_FAILED'
+        throw error
+      }
+    }
+    return store.write({
+      type: 'l2',
+      op: name,
+      args,
+      ask: true,
+      snapshot,
+    })
+  }
+
   const writeMethods = {}
   for (const name of mutations.l1Names()) {
     writeMethods[name] = (args = {}) => writeOp(name, args)
+  }
+
+  const systemMethods = {}
+  for (const name of mutations.l2Names()) {
+    systemMethods[name] = (args = {}) => systemOp(name, args)
   }
 
   function decide(approvalId, decision) {
@@ -267,10 +344,14 @@ function createHarness(options = {}) {
       !result.idempotent &&
       result.decision &&
       result.decision.decision === 'allow' &&
-      result.mutation &&
-      result.mutation.type === 'l1'
+      result.mutation
     ) {
-      result.executed = runL1(result.mutation.op, result.mutation.args || {})
+      if (result.mutation.type === 'l1') {
+        result.executed = runL1(result.mutation.op, result.mutation.args || {})
+      }
+      if (result.mutation.type === 'l2') {
+        result.executed = runL2(result.mutation.op, result.mutation.args || {})
+      }
     }
     return result
   }
@@ -294,6 +375,7 @@ function createHarness(options = {}) {
       },
     }),
     write: Object.freeze(writeMethods),
+    system: Object.freeze(systemMethods),
   })
 
   function readStdout(route, args) {
@@ -409,12 +491,14 @@ function createHarness(options = {}) {
       approval: integrity.approval,
       overlay: integrity.overlay,
       phase: integrity.phase,
-      dispatch: profile.dispatch || 'l1',
+      dispatch: profile.dispatch || 'l2',
       session_write: true,
       write: true,
-      system: false,
+      system: true,
       l1_surface: 'executable',
+      l2_surface: 'executable',
       l1: mutations.l1Names(),
+      l2: mutations.l2Names(),
       clients: profile.clients,
       tools: profile.tools,
     }
@@ -461,6 +545,7 @@ function createHarness(options = {}) {
     mutations,
     decide,
     write: dispatch.write,
+    system: dispatch.system,
     phase: integrity.phase,
   })
 
@@ -498,6 +583,7 @@ function printDumpConfig(config) {
     'write',
     'system',
     'l1_surface',
+    'l2_surface',
   ]) {
     const value = config[key] == null ? '' : config[key]
     lines.push(`  ${key}: ${value}`)
@@ -594,6 +680,30 @@ function runCli(argv, options = {}) {
     }
   }
 
+  if (command === 'system') {
+    const name = argv[1]
+    const raw = argv[2] || '{}'
+    if (!name) {
+      return { status: 2, stdout: '', stderr: 'omarchy-harness-host: system <op> [json]\n' }
+    }
+    try {
+      const method = harness.dispatch.system && harness.dispatch.system[name]
+      if (typeof method !== 'function') {
+        const error = new Error('L2_UNREPRESENTABLE')
+        error.code = 'L2_UNREPRESENTABLE'
+        throw error
+      }
+      const result = method(JSON.parse(raw))
+      return { status: 0, stdout: JSON.stringify(result, null, 2) + '\n' }
+    } catch (error) {
+      return {
+        status: 1,
+        stdout: '',
+        stderr: String(error.code || error.message) + '\n',
+      }
+    }
+  }
+
   if (command === 'approval') {
     const action = argv[1]
     try {
@@ -622,7 +732,7 @@ function runCli(argv, options = {}) {
   return {
     status: 2,
     stdout: '',
-    stderr: 'Usage: omarchy-harness-host dump-config|prompt|tool|session|approval|write|serve\n',
+    stderr: 'Usage: omarchy-harness-host dump-config|prompt|tool|session|approval|write|system|serve\n',
   }
 }
 

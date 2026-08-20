@@ -76,6 +76,9 @@ assertEqual(mutations.classify('toggle.hybrid-gpu'), 'L2', 'hybrid-gpu is L2')
 
 assertEqual(mutations.isRepresentableOnWrite('theme.set'), true, 'L1 names are representable on write')
 assertEqual(mutations.isRepresentableOnWrite('pkg.add'), false, 'pkg.add is not representable on write')
+assertEqual(mutations.isRepresentableOnSystem('pkg.add'), true, 'pkg.add is representable on system')
+assertEqual(mutations.isRepresentableOnSystem('execute'), false, 'execute is not representable on system')
+assertEqual(mutations.isRepresentableOnSystem('hyprctl'), false, 'hyprctl is not representable on system')
 assertEqual(mutations.isRepresentableOnWrite('execute'), false, 'execute is not representable on write')
 assertEqual(mutations.isRepresentableOnWrite('hyprctl'), false, 'hyprctl is not representable on write')
 assertEqual(mutations.isRepresentableOnWrite('window.move'), false, 'window.move is not representable on write')
@@ -107,19 +110,21 @@ const harness = createHarness({
 })
 assert(harness.dispatch.write !== undefined, 'Phase 3 L1 has dispatch.write')
 assert(harness.dispatch.write.execute === undefined, 'dispatch.write has no generic execute')
-assert(harness.dispatch.system === undefined, 'Phase 3 still has no dispatch.system')
+assert(harness.dispatch.system !== undefined, 'Phase 3 L2 has dispatch.system')
+assert(harness.dispatch.system.execute === undefined, 'dispatch.system has no generic execute')
 assertDeepEqual(harness.mutations.l1Names().sort(), expectedL1, 'harness exposes the L1 catalog')
 
 const config = harness.dumpConfig()
-assertEqual(config.dispatch, 'l1', 'dump-config dispatch is l1')
+assertEqual(config.dispatch, 'l2', 'dump-config dispatch is l2')
 assertEqual(config.write, true, 'dump-config write is true')
-assertEqual(config.system, false, 'dump-config system is false')
+assertEqual(config.system, true, 'dump-config system is true')
 assertEqual(config.l1_surface, 'executable', 'dump-config reports the executable L1 surface')
+assertEqual(config.l2_surface, 'executable', 'dump-config reports the executable L2 surface')
 assertDeepEqual(config.l1.sort(), expectedL1, 'dump-config lists the L1 names')
 
 const init = harness.acp.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' })
 assertEqual(init.result.write, true, 'ACP advertises L1 write')
-assertEqual(init.result.system, false, 'ACP does not advertise system write')
+assertEqual(init.result.system, true, 'ACP advertises L2 system write')
 assertDeepEqual(init.result.l1.sort(), expectedL1, 'ACP initialize advertises the L1 catalog')
 assert(init.result.tools.includes('theme.set'), 'ACP tools include finite L1 ops')
 assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tools still have no untyped write alias')
@@ -136,8 +141,8 @@ JS
 : >"$MUTATION_LOG"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
-echo "$dump_json" | jq -e '.dispatch == "l1" and .write == true and .system == false and .l1_surface == "executable" and (.l1 | length == 8)' >/dev/null
-pass "dump-config reports an executable L1 surface without system write"
+echo "$dump_json" | jq -e '.dispatch == "l2" and .write == true and .system == true and .l1_surface == "executable" and .l2_surface == "executable" and (.l1 | length == 8)' >/dev/null
+pass "dump-config reports executable L1 and L2 surfaces"
 
 if [[ -s $MUTATION_LOG ]]; then
   fail "L1 catalog review does not mutate Omarchy" "$(cat "$MUTATION_LOG")"

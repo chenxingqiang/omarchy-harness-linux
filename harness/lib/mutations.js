@@ -122,10 +122,94 @@ const L1 = Object.freeze({
   }),
 })
 
-const L2 = Object.freeze([
-  'pkg.add',
-  'pkg.drop',
-  'update',
+const L2 = Object.freeze({
+  'pkg.add': Object.freeze({
+    target: 'omarchy-pkg-add <packages...>',
+    mutationSemantics: 'install Arch packages via the Omarchy effector',
+    reversibility: 'pkg.drop the recorded names',
+    privilege: 'effector',
+    scope: 'system',
+    snapshot: true,
+    approval: 'required',
+    auditEvent: 'omarchy/pkg',
+    replay: 'do not re-install from reduce',
+    allowedArgs: Object.freeze(['packages']),
+  }),
+  'pkg.drop': Object.freeze({
+    target: 'omarchy-pkg-drop <packages...>',
+    mutationSemantics: 'remove Arch packages via the Omarchy effector',
+    reversibility: 'pkg.add the recorded names',
+    privilege: 'effector',
+    scope: 'system',
+    snapshot: true,
+    approval: 'required',
+    auditEvent: 'omarchy/pkg',
+    replay: 'do not re-drop from reduce',
+    allowedArgs: Object.freeze(['packages']),
+  }),
+  update: Object.freeze({
+    target: 'omarchy-update -y',
+    mutationSemantics: 'unattended Omarchy and system package update',
+    reversibility: 'restore the preflight snapshot',
+    privilege: 'effector',
+    scope: 'system',
+    snapshot: true,
+    approval: 'required',
+    auditEvent: 'omarchy/update',
+    replay: 'do not re-run from reduce',
+    allowedArgs: Object.freeze([]),
+  }),
+  'snapshot.create': Object.freeze({
+    target: 'omarchy-snapshot create',
+    mutationSemantics: 'create snapper snapshots',
+    reversibility: 'n/a',
+    privilege: 'effector',
+    scope: 'system',
+    snapshot: false,
+    approval: 'required',
+    auditEvent: 'omarchy/snapshot',
+    replay: 'do not snapshot again from reduce',
+    allowedArgs: Object.freeze([]),
+  }),
+  'snapshot.restore': Object.freeze({
+    target: 'omarchy-snapshot restore',
+    mutationSemantics: 'restore a snapper snapshot',
+    reversibility: 'no',
+    privilege: 'effector',
+    scope: 'system',
+    snapshot: true,
+    approval: 'required',
+    auditEvent: 'omarchy/snapshot',
+    replay: 'do not restore again from reduce',
+    allowedArgs: Object.freeze([]),
+  }),
+  'system.reboot': Object.freeze({
+    target: 'omarchy-system-reboot',
+    mutationSemantics: 'reboot after closing windows',
+    reversibility: 'no',
+    privilege: 'none',
+    scope: 'system',
+    snapshot: false,
+    approval: 'required',
+    auditEvent: 'omarchy/system',
+    replay: 'do not reboot from reduce',
+    allowedArgs: Object.freeze([]),
+  }),
+  'system.shutdown': Object.freeze({
+    target: 'omarchy-system-shutdown',
+    mutationSemantics: 'power off after closing windows',
+    reversibility: 'no',
+    privilege: 'none',
+    scope: 'system',
+    snapshot: false,
+    approval: 'required',
+    auditEvent: 'omarchy/system',
+    replay: 'do not shut down from reduce',
+    allowedArgs: Object.freeze([]),
+  }),
+})
+
+const L2_HELD = Object.freeze([
   'execute',
   'shell',
   'hyprctl',
@@ -135,19 +219,17 @@ const L2 = Object.freeze([
   'launch.browser.url',
   'launch.or-focus',
   'toggle.hybrid-gpu',
-  'system.reboot',
-  'system.shutdown',
   'etc.write',
   'usr.write',
   'service.enable',
   'firmware',
-  'snapshot',
+  'omarchy_cli',
 ])
 
 function normalize(name) {
   return String(name || '')
     .trim()
-    .replace(/^dispatch\.write\./, '')
+    .replace(/^dispatch\.(write|system)\./, '')
     .replace(/^omarchy[._]/, '')
     .replace(/\s+/g, '.')
 }
@@ -156,8 +238,16 @@ function l1Names() {
   return Object.keys(L1)
 }
 
+function l2Names() {
+  return Object.keys(L2)
+}
+
 function contract(name) {
   return L1[normalize(name)] || null
+}
+
+function systemContract(name) {
+  return L2[normalize(name)] || null
 }
 
 function classify(name) {
@@ -176,6 +266,10 @@ function isRepresentableOnWrite(name) {
   return Boolean(L1[normalize(name)])
 }
 
+function isRepresentableOnSystem(name) {
+  return Boolean(L2[normalize(name)])
+}
+
 function codedError(code, extra) {
   const error = new Error(code)
   error.code = code
@@ -183,6 +277,62 @@ function codedError(code, extra) {
     Object.assign(error, extra)
   }
   return error
+}
+
+function validateSystemArgs(name, args) {
+  const key = normalize(name)
+  const spec = L2[key]
+  if (!spec) {
+    return { ok: false, code: 'NOT_L2' }
+  }
+  const provided = Object.keys(args || {})
+  const forbidden = provided.filter((field) => !spec.allowedArgs.includes(field))
+  if (forbidden.length) {
+    return { ok: false, code: 'FORBIDDEN_ARG', fields: forbidden }
+  }
+  return { ok: true }
+}
+
+function packagesArg(args) {
+  const packages = args && args.packages
+  if (!Array.isArray(packages) || packages.length === 0) {
+    throw codedError('FORBIDDEN_ARG', { fields: ['packages'] })
+  }
+  for (const pkg of packages) {
+    rejectSmuggled(pkg, 'packages')
+  }
+  return packages
+}
+
+function argvForSystem(name, args = {}) {
+  const key = normalize(name)
+  const spec = L2[key]
+  if (!spec) {
+    throw codedError('L2_UNREPRESENTABLE', { op: name })
+  }
+  const validated = validateSystemArgs(key, args)
+  if (!validated.ok) {
+    throw codedError(validated.code, { fields: validated.fields })
+  }
+
+  switch (key) {
+    case 'pkg.add':
+      return ['omarchy', 'pkg', 'add', ...packagesArg(args)]
+    case 'pkg.drop':
+      return ['omarchy', 'pkg', 'drop', ...packagesArg(args)]
+    case 'update':
+      return ['omarchy', 'update', '-y']
+    case 'snapshot.create':
+      return ['omarchy', 'snapshot', 'create']
+    case 'snapshot.restore':
+      return ['omarchy', 'snapshot', 'restore']
+    case 'system.reboot':
+      return ['omarchy', 'system', 'reboot']
+    case 'system.shutdown':
+      return ['omarchy', 'system', 'shutdown']
+    default:
+      throw codedError('L2_UNREPRESENTABLE', { op: name })
+  }
 }
 
 function validateArgs(name, args) {
@@ -290,17 +440,37 @@ function closedWriteSurface() {
   return Object.freeze(surface)
 }
 
+function closedSystemSurface() {
+  const surface = {}
+  for (const name of l2Names()) {
+    surface[name] = Object.freeze({
+      name,
+      layer: 'L2',
+      executable: true,
+      contract: L2[name],
+    })
+  }
+  return Object.freeze(surface)
+}
+
 module.exports = {
   CONTRACT_FIELDS,
   L0,
   L1,
   L2,
+  L2_HELD,
   argvFor,
+  argvForSystem,
   classify,
+  closedSystemSurface,
   closedWriteSurface,
   contract,
+  isRepresentableOnSystem,
   isRepresentableOnWrite,
   l1Names,
+  l2Names,
   normalize,
+  systemContract,
   validateArgs,
+  validateSystemArgs,
 }

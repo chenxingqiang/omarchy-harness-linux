@@ -32,7 +32,10 @@ function requiresApproval(mutation) {
   if (mutation.type === 'reset') {
     return true
   }
-  return mutation.type === 'l1' && mutation.ask === true
+  if (mutation.type === 'l1' && mutation.ask === true) {
+    return true
+  }
+  return mutation.type === 'l2'
 }
 
 function applyEvent(state, event) {
@@ -245,7 +248,7 @@ function createSessionStore(options = {}) {
       decision,
       reason: reason || 'user',
     })
-    if (decision === 'allow' && pending.mutation.type !== 'l1') {
+    if (decision === 'allow' && pending.mutation.type !== 'l1' && pending.mutation.type !== 'l2') {
       applyMutation(pending.mutation)
     }
     return {

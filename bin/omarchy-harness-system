@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# omarchy:summary=Propose a finite L2 system mutation through Harness
+# omarchy:group=harness
+# omarchy:name=system
+# omarchy:args=<op> [json]
+# omarchy:examples=omarchy harness system pkg.add '{"packages":["htop"]}'
+
+if (($# == 0)); then
+  echo "Usage: omarchy harness system <op> [json]" >&2
+  exit 2
+fi
+
+exec omarchy-harness-host system "$@"

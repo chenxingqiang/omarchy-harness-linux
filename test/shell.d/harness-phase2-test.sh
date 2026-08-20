@@ -157,15 +157,16 @@ const harness = createHarness({
 })
 assert(harness.dispatch.write !== undefined, 'Phase 3 L1 has dispatch.write')
 assert(harness.dispatch.write.execute === undefined, 'dispatch.write has no generic execute')
-assert(harness.dispatch.system === undefined, 'Phase 2 still has no dispatch.system')
+assert(harness.dispatch.system !== undefined, 'Phase 3 L2 has dispatch.system')
+assert(harness.dispatch.system.execute === undefined, 'dispatch.system has no generic execute')
 harness.store.write({ type: 'metadata', patch: { title: 'only session' } })
 assertEqual(calls.length, 0, 'session write does not call omarchy or hyprctl')
 
 const config = harness.dumpConfig()
-assertEqual(config.dispatch, 'l1', 'dump-config dispatch is l1')
+assertEqual(config.dispatch, 'l2', 'dump-config dispatch is l2')
 assertEqual(config.session_write, true, 'dump-config reports session_write')
 assertEqual(config.write, true, 'dump-config write is true')
-assertEqual(config.system, false, 'dump-config system is false')
+assertEqual(config.system, true, 'dump-config system is true')
 assertEqual(config.phase, 3, 'dump-config phase is 3')
 
 const beforeAcp = calls.length
@@ -244,8 +245,8 @@ echo "$state_json" | jq -e '.metadata.title == "parent-cli"' >/dev/null ||
 pass "fork and resume restore session state from the log"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
-echo "$dump_json" | jq -e '.phase == 3 and .session_write == true and .dispatch == "l1" and .write == true and .system == false' >/dev/null
-pass "dump-config reports phase 3 L1 write without dispatch.system"
+echo "$dump_json" | jq -e '.phase == 3 and .session_write == true and .dispatch == "l2" and .write == true and .system == true' >/dev/null
+pass "dump-config reports phase 3 L2 system write with session preset"
 
 if [[ -s $MUTATION_LOG ]]; then
   fail "phase 2 commands do not mutate Omarchy" "$(cat "$MUTATION_LOG")"

@@ -141,7 +141,8 @@ const harness = createHarness({
 })
 
 assert(harness.dispatch.write !== undefined, 'Phase 3 L1 has dispatch.write')
-assert(harness.dispatch.system === undefined, 'Phase 1 has no dispatch.system')
+assert(harness.dispatch.system !== undefined, 'Phase 3 L2 has dispatch.system')
+assert(harness.dispatch.system.execute === undefined, 'dispatch.system has no generic execute')
 assert(harness.dispatch.write.execute === undefined, 'dispatch.write has no generic execute')
 assert(Object.isFrozen(harness.dispatch), 'dispatch object is frozen')
 assert(Object.isFrozen(harness.dispatch.write), 'dispatch.write is frozen')
@@ -203,10 +204,10 @@ assertEqual(config.profile, 'omarchy', 'dump-config profile is omarchy')
 assertEqual(config.overlay, 'acp', 'dump-config overlay protocol is acp')
 assertEqual(config.approval, 'acp', 'dump-config approval protocol is acp')
 assertEqual(config.phase, 3, 'dump-config phase is 3')
-assertEqual(config.dispatch, 'l1', 'dump-config dispatch is l1')
+assertEqual(config.dispatch, 'l2', 'dump-config dispatch is l2')
 assertEqual(config.session_write, true, 'dump-config session_write is true')
 assertEqual(config.write, true, 'dump-config write is true')
-assertEqual(config.system, false, 'dump-config system is false')
+assertEqual(config.system, true, 'dump-config system is true')
 assert(String(config.bundle_sha256).length === 64, 'bundle hash is sha256 hex')
 
 const themes = harness.tools.omarchy_theme_list()
@@ -216,9 +217,9 @@ assert(commandHits.some((entry) => entry.name === 'list'), 'omarchy_commands fil
 assert(!commandHits.some((entry) => entry.hidden), 'omarchy_commands omits hidden commands')
 
 const init = harness.acp.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' })
-assertEqual(init.result.dispatch, 'l1', 'ACP initialize advertises L1 dispatch')
+assertEqual(init.result.dispatch, 'l2', 'ACP initialize advertises L2 dispatch')
 assertEqual(init.result.write, true, 'ACP initialize advertises L1 write')
-assertEqual(init.result.system, false, 'ACP initialize does not advertise system')
+assertEqual(init.result.system, true, 'ACP initialize advertises L2 system')
 assertEqual(init.result.sessionWrite, true, 'ACP initialize advertises session write')
 assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tool list has no untyped write alias')
 assert(init.result.tools.includes('omarchy_status'), 'ACP tool list includes omarchy_status')
@@ -244,9 +245,9 @@ const statusCall = harness.acp.handle({
 assert(Array.isArray(statusCall.result.content), 'ACP tools/call runs a readonly tool')
 
 const profile = requireFromRoot('harness/lib/acp.js').loadProfile()
-assertEqual(profile.dispatch, 'l1', 'omarchy profile is the L1 write surface')
+assertEqual(profile.dispatch, 'l2', 'omarchy profile is the L2 system surface')
 assertEqual(profile.write, true, 'omarchy profile advertises L1 write')
-assertEqual(profile.system, false, 'omarchy profile does not advertise system write')
+assertEqual(profile.system, true, 'omarchy profile advertises L2 system write')
 assertEqual(profile.clients.overlay, 'acp', 'overlay is an ACP client')
 assertEqual(profile.clients.cli, 'acp', 'harness CLI is an ACP client')
 assertEqual(profile.clients.menu, 'data-plane', 'menu stays on the data plane')
@@ -268,11 +269,11 @@ dump=$("$ROOT/bin/omarchy-harness-dump-config")
 [[ $dump == *"profile: omarchy"* ]] || fail "dump-config prints profile" "$dump"
 [[ $dump == *"overlay: acp"* ]] || fail "dump-config prints overlay=acp" "$dump"
 [[ $dump == *"approval: acp"* ]] || fail "dump-config prints approval=acp" "$dump"
-[[ $dump == *"dispatch: l1"* ]] || fail "dump-config prints dispatch=l1" "$dump"
+[[ $dump == *"dispatch: l2"* ]] || fail "dump-config prints dispatch=l2" "$dump"
 pass "dump-config prints runtime provenance"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
-echo "$dump_json" | jq -e '.profile == "omarchy" and .overlay == "acp" and .dispatch == "l1" and .write == true and .system == false and .clients.menu == "data-plane" and .clients.overlay == "acp"' >/dev/null
+echo "$dump_json" | jq -e '.profile == "omarchy" and .overlay == "acp" and .dispatch == "l2" and .write == true and .system == true and .clients.menu == "data-plane" and .clients.overlay == "acp"' >/dev/null
 pass "dump-config --json is structured provenance"
 
 status=0

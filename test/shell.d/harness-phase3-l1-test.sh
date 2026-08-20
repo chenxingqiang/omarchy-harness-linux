@@ -62,7 +62,8 @@ const harness = createHarness({
 })
 
 assert(harness.dispatch.write !== undefined, 'Phase 3 L1 has dispatch.write')
-assert(harness.dispatch.system === undefined, 'Phase 3 L1 still has no dispatch.system')
+assert(harness.dispatch.system !== undefined, 'Phase 3 L2 has dispatch.system')
+assert(harness.dispatch.system.execute === undefined, 'dispatch.system has no generic execute')
 assert(harness.dispatch.write.execute === undefined, 'dispatch.write has no generic execute')
 assert(harness.dispatch.write.shell === undefined, 'dispatch.write has no shell')
 assert(harness.dispatch.write['pkg.add'] === undefined, 'dispatch.write has no pkg.add')
@@ -150,8 +151,8 @@ assert(urlLaunch && urlLaunch.code === 'FORBIDDEN_ARG', 'launch.browser rejects 
 
 const init = harness.acp.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' })
 assertEqual(init.result.write, true, 'ACP advertises L1 write')
-assertEqual(init.result.system, false, 'ACP does not advertise system write')
-assertEqual(init.result.dispatch, 'l1', 'ACP dispatch is the L1 surface')
+assertEqual(init.result.system, true, 'ACP advertises L2 system write')
+assertEqual(init.result.dispatch, 'l2', 'ACP dispatch is the L2 surface')
 assert(init.result.tools.includes('theme.set'), 'ACP tools include theme.set')
 assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tools still omit untyped omarchy_theme_set')
 
@@ -168,16 +169,16 @@ const acpPkg = harness.acp.handle({
   jsonrpc: '2.0',
   id: 3,
   method: 'tools/call',
-  params: { name: 'pkg.add', arguments: { pkg: 'htop' } },
+  params: { name: 'execute', arguments: { argv: ['pacman', '-S', 'htop'] } },
 })
-assertEqual(acpPkg.error.message, 'L2_UNREPRESENTABLE', 'ACP cannot call L2 pkg.add')
+assertEqual(acpPkg.error.message, 'L2_UNREPRESENTABLE', 'ACP cannot call generic execute')
 
 const config = harness.dumpConfig()
 assertEqual(config.phase, 3, 'dump-config phase is 3')
-assertEqual(config.dispatch, 'l1', 'dump-config dispatch is l1')
+assertEqual(config.dispatch, 'l2', 'dump-config dispatch is l2')
 assertEqual(config.write, true, 'dump-config write is true')
 assertEqual(config.l1_surface, 'executable', 'dump-config L1 surface is executable')
-assertEqual(config.system, false, 'dump-config system is false')
+assertEqual(config.system, true, 'dump-config system is true')
 JS
 
 : >"$CALL_LOG"
@@ -193,8 +194,8 @@ echo "$launch_json" | jq -e '.pending == true' >/dev/null || fail "write CLI lau
 pass "write CLI launch.terminal is pending approval"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
-echo "$dump_json" | jq -e '.phase == 3 and .dispatch == "l1" and .write == true and .system == false and .l1_surface == "executable"' >/dev/null
-pass "dump-config reports executable L1 without system write"
+echo "$dump_json" | jq -e '.phase == 3 and .dispatch == "l2" and .write == true and .system == true and .l1_surface == "executable"' >/dev/null
+pass "dump-config reports executable L1 and L2"
 
 if grep -Eq 'pkg add|update|--exec' "$CALL_LOG"; then
   fail "L1 write does not dispatch L2 routes" "$(cat "$CALL_LOG")"

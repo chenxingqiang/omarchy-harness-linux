@@ -54,6 +54,10 @@ function l1ToolNames() {
   return mutations.l1Names()
 }
 
+function l2ToolNames() {
+  return mutations.l2Names()
+}
+
 function jsonRpcResult(id, result) {
   return { jsonrpc: '2.0', id, result }
 }
@@ -71,7 +75,7 @@ function createAcpSession(harness) {
   let sessionId = null
 
   function initialize(id) {
-    const tools = READONLY_TOOLS.concat(SESSION_TOOLS, l1ToolNames())
+    const tools = READONLY_TOOLS.concat(SESSION_TOOLS, l1ToolNames(), l2ToolNames())
     return jsonRpcResult(id, {
       protocolVersion: 1,
       serverInfo: {
@@ -83,12 +87,13 @@ function createAcpSession(harness) {
         promptCapabilities: { image: false, audio: false, embeddedContext: false },
       },
       profile: profile.name,
-      dispatch: profile.dispatch || 'l1',
+      dispatch: profile.dispatch || 'l2',
       tools,
       write: true,
-      system: false,
+      system: true,
       sessionWrite: true,
       l1: mutations.l1Names(),
+      l2: mutations.l2Names(),
     })
   }
 
@@ -121,9 +126,17 @@ function createAcpSession(harness) {
         return jsonRpcError(id, -32001, error.code || error.message, { tool: name })
       }
     }
+    if (l2ToolNames().includes(name) && harness.system && typeof harness.system[name] === 'function') {
+      try {
+        const content = harness.system[name](args)
+        return jsonRpcResult(id, { content, isError: false })
+      } catch (error) {
+        return jsonRpcError(id, -32001, error.code || error.message, { tool: name })
+      }
+    }
     return jsonRpcError(id, -32001, 'L2_UNREPRESENTABLE', {
       tool: name,
-      dispatch: 'l1',
+      dispatch: 'l2',
     })
   }
 
@@ -191,7 +204,7 @@ function createAcpSession(harness) {
   return {
     handle,
     profile,
-    tools: READONLY_TOOLS.concat(SESSION_TOOLS, l1ToolNames()),
+    tools: READONLY_TOOLS.concat(SESSION_TOOLS, l1ToolNames(), l2ToolNames()),
   }
 }
 
