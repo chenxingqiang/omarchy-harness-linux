@@ -1,6 +1,57 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 1.
+Revision 2. Rev 1 was the design-only draft. Rev 2 freezes the v1 decisions from design review and narrows Phase 1 to a read-only control plane.
+
+## Frozen v1 decisions
+
+These are normative. Phase 1 code follows them; they are not reopened while writing the host.
+
+| Item | v1 decision | Why |
+|---|---|---|
+| Node | Ship a **pinned Node 22 LTS runtime with the Harness feature**. Not mise, not whatever is on `PATH` in production. | The host is a `graphical-session` control-plane service. Startup must be deterministic: package installed → runtime exists → bundle hash verified → `systemd --user` start. |
+| `node_modules` | **Prebundle a production tree, hash-pin it. First-enable must not hit the network.** | A control plane that is half-installed because the registry was down is not an OS feature. |
+| Overlay protocol | **ACP-first.** Turns, streaming, and approval all travel on ACP events/requests. No private side-channel unless Phase 2 proves ACP cannot express an approval card. | One turn, one session log, one client protocol. A side-channel for approval forks resume/fork/replay: the chat approved, the log did not. |
+| `dsh` pin | **Exact version + lockfile/hash.** Omarchy releases take a **manual bump PR**. `omarchy update` never floats `dsh`. | Preview control-plane infrastructure. Upgrade risk is higher than a coding CLI. |
+
+Rejected for the Node runtime: mise-managed Node. mise is the right tool for optional coding CLIs that install on first invoke. It is the wrong start path for a user unit that must already be on disk before first login.
+
+Installed layout (package-owned vs user state):
+
+```text
+/usr/lib/omarchy-harness/node/
+    node
+    runtime metadata
+
+/usr/lib/omarchy-harness/bundle/
+    package.json
+    pnpm-lock.yaml
+    node_modules/
+    integrity.json
+
+$OMARCHY_PATH/harness/          overlay source (profile, seams, host)
+~/.config/omarchy/harness/      user cordis.patch.yml and overlays
+~/.local/state/omarchy/harness/
+    sessions/
+    logs/
+    runtime/
+    home/                       $DSH_HOME
+```
+
+`omarchy harness dump-config` is the authority for what booted, and it **must** print runtime provenance, not only the Cordis tree:
+
+```text
+Harness:
+  profile: omarchy
+  dsh: 0.x.y
+  dsh_commit: <sha>
+  node: 22.x.y
+  bundle_sha256: <sha256>
+  preset: session
+  approval: acp
+  overlay: acp
+  phase: 1
+  dispatch: readonly
+```
 
 ## Problem
 
@@ -25,13 +76,13 @@ One overlay, not a fork of either tree:
 - **Do not replace** Hyprland, Quickshell, or the `omarchy-*` CLI. Those remain the data plane. Harness never talks to pacman, hyprctl, or DBus as a pile of ad-hoc argv. It talks to Omarchy commands and shell IPC, which already own backups, theming, and privilege.
 - **Do not merge** the three plugin systems. Cordis plugins (agent capabilities), Quickshell plugins (desktop surfaces), and `omarchy-*` binaries (OS effectors) are different grains. The work is to compose them, not to collapse them.
 
-What ships:
+What ships (across phases; Phase 1 is the read-only subset below):
 
 - A Cordis bundle `dsh-omarchy` and a profile `omarchy` that boots as a user systemd service for the graphical session.
 - Typed OS tools and a small set of `ctx.omarchy.*` seams, so "set the theme" is a tool with a schema, not a bash string.
 - The existing `default/agents/skills/omarchy` tree mounted as a Harness skill provider.
 - Desktop surfaces that speak ACP / `session/event`: a shell overlay for conversation and approval, plus `omarchy harness …` for headless turns.
-- Policy: observe freely, mutate the session with confirmation when it is hard to undo, mutate the system only through `ctx.approval` and the existing `sudo`/`pkexec` line.
+- Policy: observe freely, mutate the session with confirmation when it is hard to undo, mutate the system only through `ctx.approval` (over ACP) and the existing `sudo`/`pkexec` line.
 
 ```text
  User / keybind / menu / bar / overlay / omarchy harness …
@@ -49,7 +100,22 @@ What ships:
      systemd --user  pkexec / sudo       notify / snapshot
 ```
 
-A turn that changes the machine looks like any other Harness turn. The durable facts live in the session log. The live work is interceptable. The UI renders from the same events.
+The Harness log records **agent control-plane facts**, not the entire Linux desktop as an event-sourced database.
+
+```text
+User presses a keybind
+    → Quickshell / Omarchy
+    → effect happens
+    → not a Harness event
+
+User asks the agent "move the focused window to workspace 3"
+    → Harness tool
+    → ctx.omarchy.windows
+    → Hyprland / Omarchy effector
+    → session log
+```
+
+A turn that changes the machine (Phase 2+) looks like any other Harness turn. The durable facts live in the session log. The live work is interceptable. The UI renders from the same events.
 
 ```text
 turn/start
@@ -59,12 +125,12 @@ turn/start
      step/start
      agent/request -> llm/stream -> assistant/message
      tool/call omarchy_theme_set
-       tools/pre-execute (permission preset, maybe ask)
+       tools/pre-execute (permission preset, maybe ask over ACP)
        execute -> omarchy theme set tokyo-night
        tools/post-execute
      tool/result  (theme changed; session event omarchy/theme)
      tool/call omarchy_snapshot_create
-       tools/pre-execute -> ctx.approval (desktop prompt / pkexec)
+       tools/pre-execute -> ctx.approval (ACP request; desktop card)
        execute -> omarchy snapshot …
      tool/result
      step/end
@@ -77,12 +143,16 @@ turn/end
 - **A new kernel / distro from scratch**: Omarchy is already the opinionated Arch + Hyprland + Quickshell OS. Rebuilding Linux to host an agent throws away the CLI, the menu, snapshots, and the update pipeline. The harness-native OS is a control-plane inversion of this tree, not a different kernel.
 - **Fork `deepseek-harness` into this repo**: permanent drift against a preview that will break APIs. Cordis exists so we do not patch a privileged core. Pin, overlay, dump-config, patch by id.
 - **MCP wrapping every `omarchy-*` binary**: MCP is the right door for *third-party* tools. As the OS spine it loses session events, approval waterfalls, sandbox policy, and the ability to swap a provider (local session vs a remote box) without rewriting consumers. MCP can sit beside the seams, not under them.
-- **One generated tool per CLI command**: `omarchy commands --json` is the discovery source, not the tool catalog. Many commands are interactive wizards, TUIs, or hidden plumbing. A model with 200 write tools will bash through them. Curate a small typed catalog; keep `omarchy_cli` as an allowlisted escape hatch.
+- **One generated tool per CLI command**: `omarchy commands --json` is the discovery source, not the tool catalog. Many commands are interactive wizards, TUIs, or hidden plumbing. A model with 200 write tools will bash through them. Curate a small typed catalog; keep `omarchy_cli` as an allowlisted escape hatch (Phase 2+).
+- **A generic `dispatch(route)` that happens to be allowlisted**: once the underlying dispatcher can run any route, tests and security are betting the upper layer will not miswire. Phase 1 exposes `dispatch.readonly` only. Write and system entry points do not exist yet.
 - **Raw `bash` as the OS control tool**: Harness already has a sandboxed shell for project files. `$HOME`, `/etc`, and `/usr` are not a project. Unrestricted bash is how agents already make a mess of configs. OS mutations go through typed tools that call Omarchy.
 - **Replace the agent launcher list**: Claude, Codex, Pi, and the rest stay. Harness is the *OS* agent, not a ban on coding CLIs. Subagent providers can still delegate a coding turn to those products. `omarchy-agent` keeps launching the user's default coding CLI into `~/Work`.
-- **dsh web as the desktop**: the shipped browser UI is a valid debug and headless-admin surface. The session's primary conversation belongs in Quickshell, themed, keybound, and able to raise an approval card without opening Chromium.
+- **dsh web as the desktop**: the shipped browser UI is a valid debug and headless-admin surface. The session's primary conversation belongs in Quickshell, themed, keybound, and able to raise an approval card without opening Chromium. Phase 1 does not ship the overlay.
 - **A "Harness edition" that uninstalls the GUI**: that is the Server plan's job. This plan is the desktop control plane. A later headless profile can stack `dsh-omarchy` minus the shell overlay on Omarchy Server; it is not v1.
 - **Trust `$HOME` as the Harness workspace**: coding agents already refuse this, and `omarchy-agent` relocates to `~/Work`. The OS agent gets a dedicated session root (`~/.local/state/omarchy/harness/workspace`) plus explicit filesystem policy for `~/.config`. It does not get the whole home directory as cwd.
+- **mise-managed Node for the host**: turns a session service into a developer-toolchain problem. See Frozen v1 decisions.
+- **First-enable `pnpm install`**: forbidden. The production bundle is prepacked and hash-pinned.
+- **Private approval protocol alongside ACP**: forbidden in v1 unless Phase 2 demonstrates ACP cannot carry the card. Approval is a `SessionEvent` on the same log.
 
 ## Design
 
@@ -99,134 +169,165 @@ Composition order, same as upstream:
 5. `$DSH_HOME/cordis.patch.yml` (user overlay)
 6. `--patch` for tests and `omarchy harness dump-config`
 
-`$DSH_HOME` is `~/.local/state/omarchy/harness/home`, not `~/.dsh`. Packaging owns the profile templates under `$OMARCHY_PATH/harness/`. User overlays live under `~/.config/omarchy/harness/` so a dotfile manager can version them. Generated runtime state (sessions, logs, sockets) stays in `~/.local/state/`.
+`$DSH_HOME` is `~/.local/state/omarchy/harness/home`, not `~/.dsh`. Packaging owns the overlay source under `$OMARCHY_PATH/harness/` and the runtime/bundle under `/usr/lib/omarchy-harness/`. User overlays live under `~/.config/omarchy/harness/` so a dotfile manager can version them. Generated runtime state (sessions, logs, sockets) stays in `~/.local/state/`.
 
-Pin the upstream npm release in the bundle's package.json. `omarchy update` does not silently float to `dsh@next`. A canary job can, later; v1 does not.
+The pin lives in `harness/integrity.json`: `dsh` version, `dsh` git commit (when known), lockfile hash, bundle artifact hash, Node major/minor. A bump is a PR that changes that file and the vendored bundle together. `omarchy update` does not rewrite it.
 
-`dsh --profile omarchy --dump-config` is the authority for "what actually booted." Every OS tool is a row that a user patch can replace.
+`dsh --profile omarchy --dump-config` (wrapped as `omarchy harness dump-config`) is the authority for "what actually booted," including the provenance block in Frozen v1 decisions. Every OS tool is a row that a user patch can replace.
 
 ### 2. Process model
 
-`omarchy-harness.service` is a systemd user unit, `WantedBy=graphical-session.target`, started from first-run alongside the other session units. It runs the Harness host (Node, pinned). It does not run as root.
+`omarchy-harness.service` is a systemd user unit, `WantedBy=graphical-session.target`. It runs the Harness host on the pinned Node. It does not run as root. Phase 1 ships the unit and does **not** enable it at first-run; a surprise control plane on upgrade is unacceptable.
 
 The host exposes:
 
-- a Unix socket ACP server under `XDG_RUNTIME_DIR` (coding UIs and the Quickshell overlay attach here)
-- a headless stdin/stdout mode for `omarchy harness run` / `omarchy harness prompt`
-- optional loopback web UI, off by default, guarded like other local-only services
+- a Unix socket ACP server under `XDG_RUNTIME_DIR` (Phase 2: overlay and editors attach here; Phase 1 may bind it unused)
+- a headless stdin/stdout mode for `omarchy harness prompt` (and later `run` / `attach`)
+- optional loopback web UI, off by default, not in Phase 1
 
-If the unit is dead, the desktop is still a desktop. Menu, bar, and `omarchy-*` keep working. Harness is the preferred control plane, not a boot dependency. `omarchy harness status` is an `hw-*`-style predicate so scripts and menu guards can test liveness without parsing logs.
+If the unit is dead, the desktop is still a desktop. Menu, bar, and `omarchy-*` keep working. `omarchy harness status` is an `hw-*`-style predicate (exit 0 only when the host is live) so scripts and menu guards can test liveness without parsing logs. `dump-config` and one-shot `prompt` still run without the unit: they print packaged composition / write a session log, and they must not change the desktop.
 
-Crash policy: the unit restarts. The overlay shows a toast via `omarchy-notification-send`. In-flight turns fail closed; the session log keeps the durable prefix. This matches Harness's own "model-visible means logged" invariant — a restarted host reconstructs context from the log, not from RAM.
+Crash policy: the unit restarts. In-flight turns fail closed; the session log keeps the durable prefix. A restarted host reconstructs context from the log, not from RAM.
+
+Production Node resolution is only `/usr/lib/omarchy-harness/node/bin/node` (or `OMARCHY_HARNESS_NODE` in tests). A packaged install must not fall through to mise or a random `PATH` node.
 
 ### 3. Capability seams (`ctx.omarchy.*`)
 
-Follow Harness's seam rule: a capability is a **service definition**, a **provider**, and a **consumer** (usually a model-facing tool). Swapping the provider moves every consumer. That is how the same tools can later drive a remote Omarchy box or a VM without forking the tools.
+Follow Harness's seam rule: a capability is a **service definition**, a **provider**, and a **consumer** (usually a model-facing tool). Swapping the provider moves every consumer.
 
-v1 seams (small, real, replaceable):
+Dispatch is the choke point for CLI-backed facts, but it is **not** one function that later grows a write allowlist. The object itself is phase-gated:
 
-| Seam | Owns | Default provider | Consumers |
+```text
+ctx.omarchy.session          READ     live desktop facts
+ctx.omarchy.commands         READ     omarchy commands --json, no hidden by default
+ctx.omarchy.dispatch.readonly         observe routes only
+
+Phase 2 adds:
+  ctx.omarchy.dispatch.write → session policy → approval (ACP) → privilege
+
+Phase 3 adds:
+  ctx.omarchy.dispatch.system → snapshot → approval (ACP) → privilege
+```
+
+Phase 1 invariant: `dispatch.write` and `dispatch.system` **do not exist**. A write route is unrepresentable, not "representable but denied." Tests must prove a Phase 1 host cannot invoke any write route.
+
+| Seam | Owns | Default provider | Phase |
 |---|---|---|---|
-| `ctx.omarchy.session` | live desktop facts: theme, outputs, workspaces, shell plugins, edition | local: CLI + `omarchy-shell` IPC | observe tools, prompt sections |
-| `ctx.omarchy.dispatch` | run one allowlisted `omarchy <group> <name>` with argv, cwd, and privilege policy | local subprocess as the user | write tools, `omarchy_cli` hatch |
-| `ctx.omarchy.windows` | list / focus / move / close / launch | Hyprland via existing `omarchy-hyprland-*` | window tools |
-| `ctx.omarchy.notify` | toasts and approval cards | `omarchy-notification-send` + shell IPC | `ctx.approval` responder, `ctx.userQuestions` |
-| `ctx.omarchy.privilege` | decide `sudo` vs `pkexec` vs deny | TTY detection + the Omarchy skill's rule | dispatch, pkg, update, snapshot |
-| `ctx.omarchy.snapshot` | create / list / restore system snapshots | existing snapshot commands | update tools, rollback |
+| `ctx.omarchy.session` | live desktop facts: theme, outputs, workspaces, shell plugins, edition | local: CLI + `omarchy-shell` IPC | 1 (read) |
+| `ctx.omarchy.commands` | command catalog | `omarchy commands --json` | 1 (read) |
+| `ctx.omarchy.dispatch.readonly` | run one observe-class `omarchy` route | local subprocess as the user | 1 |
+| `ctx.omarchy.dispatch.write` | session-local mutations | local subprocess | 2 |
+| `ctx.omarchy.dispatch.system` | pkg / update / snapshot / power | local subprocess + privilege | 3 |
+| `ctx.omarchy.windows` | list (Phase 1); focus / move / close / launch (Phase 2) | Hyprland via existing helpers | 1 list / 2 mutate |
+| `ctx.omarchy.notify` | toasts and approval cards | `omarchy-notification-send` + shell IPC | 2 |
+| `ctx.omarchy.privilege` | decide `sudo` vs `pkexec` vs deny | TTY detection + the Omarchy skill's rule | 2 |
+| `ctx.omarchy.snapshot` | create / list / restore system snapshots | existing snapshot commands | 3 |
 
-What is *not* a new seam in v1: pacman, NetworkManager, PipeWire, GTK. Those stay behind `omarchy pkg`, `omarchy wifi`, `omarchy audio`, and friends. The dispatch seam is the choke point.
+What is *not* a new seam in v1: pacman, NetworkManager, PipeWire, GTK. Those stay behind `omarchy pkg`, `omarchy wifi`, `omarchy audio`, and friends.
 
-Prompt assembly: a `system-prompt` plugin injects an "Omarchy session" section derived from `ctx.omarchy.session` (theme, monitors, default apps, pending migrations). That section is a session event when it is model-visible, so replay stays honest.
+Prompt assembly: a `system-prompt` plugin injects an "Omarchy session" section derived from `ctx.omarchy.session`. That section is a session event when it is model-visible, so replay stays honest.
 
 ### 4. Tool catalog
 
-Discovery source: `omarchy commands --json` (binary, route, summary, args, aliases, `requires-sudo`). That listing is how the dispatch seam knows a route exists. It is not 1:1 with tools.
+Discovery source: `omarchy commands --json` (binary, route, summary, args, aliases, `requires-sudo`). That listing is how the commands seam knows a route exists. It is not 1:1 with tools.
 
-Curated model-facing tools, grouped by policy class:
-
-**Observe** (auto-allow, read-only):
+**Observe** (Phase 1; auto-allow, read-only):
 
 - `omarchy_status` — theme, edition, version/channel, outputs, power, pending migrations
 - `omarchy_commands` — filtered command search (group, name, summary); never dumps hidden plumbing by default
 - `omarchy_windows` — clients, workspaces, focused window
 - `omarchy_theme_list` / `omarchy_font_list` / `omarchy_plugin_list`
 
-**Act, session-local** (permission preset `session`; reversible or low blast radius):
+**Act, session-local** (Phase 2; permission preset `session`):
 
 - `omarchy_theme_set`, `omarchy_font_set`, `omarchy_background_set`
 - `omarchy_launch`, `omarchy_capture`, `omarchy_notify`
-- `omarchy_toggle` (nightlight, screensaver, and other documented toggles)
-- `omarchy_bar_*` / `omarchy_plugin_enable` via the existing bar/plugin CLIs
+- `omarchy_toggle`
+- `omarchy_bar_*` / `omarchy_plugin_enable`
 - `omarchy_refresh` (already backups before copy)
 
-**Act, system** (permission preset `system`; `ctx.approval` must allow; snapshot first when the command is an update):
+**Act, system** (Phase 3; permission preset `system`; ACP approval; snapshot first when the command is an update):
 
 - `omarchy_pkg_add` / `omarchy_pkg_drop`
-- `omarchy_update` (the real pipeline: snapshot, packages, migrate, hook)
+- `omarchy_update`
 - `omarchy_snapshot_create` / `omarchy_snapshot_restore`
 - `omarchy_system_{lock,logout,reboot,shutdown}` — shutdown/reboot always ask
 
-**Escape hatch** (strict):
+**Escape hatch** (Phase 2+; strict):
 
-- `omarchy_cli` — argv must resolve to a known `omarchy` route, must not be hidden unless the user overlay allows it, and inherits the route's `requires-sudo` bit. Interactive TUIs and setup wizards are rejected with a message that names the desktop surface to use instead.
+- `omarchy_cli` — argv must resolve to a known `omarchy` route, must not be hidden unless the user overlay allows it, and inherits the route's `requires-sudo` bit. Interactive TUIs and setup wizards are rejected with a message that names the desktop surface to use instead. Phase 1 has no `omarchy_cli`.
 
 **Not exposed as OS tools:**
 
 - raw `bash` against `/`, `/etc`, `/usr`
 - `omarchy-dev-*` on a production install
 - anything that writes `/usr/share/omarchy/`
-- `omarchy-reinstall-configs` without an explicit high-severity approval (it clobbers `$HOME` from `/etc/skel`)
+- `omarchy-reinstall-configs` without an explicit high-severity approval
 
-Coding-in-a-repo stays on Harness's existing `fs`, `shell`, and `sandbox` seams, with cwd in a project under `~/Work`. The OS agent and the coding agent are different presets (`ctx.agentPresets`): one scoped to `dsh-omarchy` tools, one to the stock coding toolset. A turn may spawn the other as a subagent rather than mixing both catalogs in one prompt.
+Coding-in-a-repo stays on Harness's existing `fs`, `shell`, and `sandbox` seams, with cwd in a project under `~/Work`. The OS agent and the coding agent are different presets (`ctx.agentPresets`). A turn may spawn the other as a subagent rather than mixing both catalogs in one prompt.
 
 ### 5. Skills
 
 Keep the shipped skill at `default/agents/skills/omarchy`. Do not rewrite it into TypeScript.
 
-A Harness `ctx.skills` filesystem provider points at `$OMARCHY_PATH/default/agents/skills/` plus `~/.config/omarchy/skills/`. The existing finalize step that symlinks into `~/.{agents,claude,codex,pi/agent}/skills/` remains, so other CLIs keep working.
+A Harness `ctx.skills` filesystem provider points at `$OMARCHY_PATH/default/agents/skills/` plus `~/.config/omarchy/skills/`. The existing finalize step that symlinks into `~/.{agents,claude,codex,pi/agent}/skills/` remains, so other CLIs keep working. Phase 1 does not require the skill mount to be live for observe tools.
 
-The skill's privilege paragraph becomes executable policy in `ctx.omarchy.privilege`, not just prose the model may ignore:
+The skill's privilege paragraph becomes executable policy in `ctx.omarchy.privilege` in Phase 2:
 
 - visible terminal → `sudo`
 - no TTY (overlay, notification action, user unit) → `pkexec`
 - never wrap a command that already elevates
 - never edit `/usr/share/omarchy/`
 
-`diagnose-crash` stays a skill. `omarchy-agent-crash` can later hand the crash to the Harness OS preset instead of the default coding CLI; v1 may keep the current launcher and only add a Harness path behind a flag.
-
 ### 6. Approval, sandbox, and privilege
 
 Harness already splits these, and we keep them split:
 
-- **Sandbox** (`ctx.sandbox` + `ctx.sandboxPolicy`) confines *spawned project processes* (bash, code runtime). It does not wrap `omarchy theme set`. File-effect policy on a workspace is the wrong primitive for a compositor.
-- **Approval** (`ctx.approval`) is the one-shot human decision for a tool call. Absent or unanswerable → deny. The Omarchy provider renders this as a Quickshell card (and a notification that punches DND via `omarchy-action`), not as a browser modal.
+- **Sandbox** (`ctx.sandbox` + `ctx.sandboxPolicy`) confines *spawned project processes* (bash, code runtime). It does not wrap `omarchy theme set`.
+- **Approval** (`ctx.approval`) is the one-shot human decision for a tool call, carried on **ACP**. Absent or unanswerable → deny. The Omarchy responder (Phase 2) renders a Quickshell card (and a notification that punches DND via `omarchy-action`).
 - **Privilege** is Omarchy-specific: after approval, dispatch still has to pick `sudo` or `pkexec` or refuse.
 
 Permission presets map onto Harness's `ctx.permissionPresets`:
 
 | Preset | What the OS agent may do without asking |
 |---|---|
-| `observe` | read-only tools only |
-| `session` | observe + session-local acts; system acts ask |
+| `observe` | read-only tools only (Phase 1 effective behavior) |
+| `session` | observe + session-local acts; system acts ask (v1 default, from Phase 2) |
 | `system` | also pkg/update/snapshot after one-shot approval |
 | `off` | deny every OS write (debug / kiosk) |
 
-Default for a fresh user is `session`. The auto-approve flags that `omarchy-agent` passes to coding CLIs do **not** apply to the OS agent. Unattended desktop mutation is how configs get destroyed.
-
-Destructive system tools take a Snapper snapshot first when one is not already fresh, and log `omarchy/snapshot` as a session event so rollback is a fact in the same log as the mutation.
+Default for a fresh user is `session` once writes exist. Phase 1 cannot write, so the live catalog is observe-only regardless of the stored preset. The auto-approve flags that `omarchy-agent` passes to coding CLIs do **not** apply to the OS agent.
 
 ### 7. Session log as OS history
 
-Harness's rule stays: **model-visible means logged**. OS facts that reached the model, and OS mutations the model caused, are `SessionEvent`s.
+Harness's rule stays: **model-visible means logged.** OS facts that reached the model, and OS mutations the model caused, are `SessionEvent`s.
+
+OS observation has two forms. This is a normative rule, not commentary:
+
+```text
+1. ephemeral observation
+   - internal tool execution (e.g. dispatch.readonly used to build a payload)
+   - never entered model context
+   - no durable session event required
+   - must not spam omarchy/status on a poll
+
+2. model-visible observation
+   - entered prompt/context (system-prompt section, tool result the model will see, or prompt assembly)
+   - MUST emit omarchy/status (or a typed equivalent)
+   - MUST contain snapshot/version identity
+   - skip a duplicate when the last model-visible omarchy/status identity is unchanged
+```
+
+Snapshot identity is a hash of the canonical status payload plus a captured-at timestamp stored beside it, so resume/replay can say *which* observation the model saw. Freshness is that identity, not a wall-clock TTL.
 
 Extend the event map (names indicative):
 
-- `omarchy/status` — injected session snapshot at turn start when the observe section changed
-- `omarchy/dispatch` — route, argv, exit, privilege path
-- `omarchy/theme`, `omarchy/plugin`, `omarchy/window` — specific mutations worth rendering as cards
-- `omarchy/approval` — correlated with `ctx.approval`, so a refused reboot is replayable
+- `omarchy/status` — model-visible session snapshot
+- `omarchy/dispatch` — route, argv, exit, privilege path (Phase 2+ for writes; Phase 1 may log readonly dispatches only when they became model-visible)
+- `omarchy/theme`, `omarchy/plugin`, `omarchy/window` — specific mutations worth rendering as cards (Phase 2+)
+- `omarchy/approval` — correlated with `ctx.approval` over ACP, so a refused reboot is replayable (Phase 2+)
 
-Fork, resume, transcripts, and telemetry then cover "what did the agent do to my machine?" without a second audit format. The overlay and `omarchy harness transcript` render from this stream.
+Fork, resume, transcripts, and telemetry then cover "what did the agent do to my machine?" without a second audit format.
 
 Do not log secrets. Credentials stay on `ctx.credentials`. Notification bodies that might contain them are redacted in the durable event.
 
@@ -234,59 +335,94 @@ Do not log secrets. Credentials stay on `ctx.credentials`. Notification bodies t
 
 Three clients, one host:
 
-1. **Shell overlay** `omarchy.harness` — a Quickshell plugin (`kinds: ["overlay", "service"]`). Summon with a keybind and a menu entry. Streaming tokens, tool cards, and approval buttons. Talks ACP to the user unit. Themed via the existing shell theme path, not a parallel CSS file.
-2. **CLI** — `omarchy harness status|run|prompt|attach|dump-config|preset`. Headless turns for scripts, crash diagnosis, and `omarchy-agent-prompt`-shaped one-shots that should hit the OS preset instead of a coding CLI.
-3. **Optional web** — `dsh web` on loopback, off by default, for debugging composition and for a machine you are not sitting in front of (pairs later with the Server plan).
+1. **Shell overlay** `omarchy.harness` — Phase 2. Quickshell plugin. ACP client. Themed via the existing shell theme path.
+2. **CLI** — Phase 1: `omarchy harness status|prompt|dump-config`. Later: `run|attach|preset|enable|disable`.
+3. **Optional web** — not Phase 1. Loopback, off by default.
 
-The existing `omarchy.agents` panel stays a **usage** display for coding subscriptions. It does not become the Harness UI. A small status glyph on the bar (separate plugin, self-hiding when the unit is off) can show "turn in progress" / "approval needed."
+The existing `omarchy.agents` panel stays a **usage** display for coding subscriptions. It does not become the Harness UI.
 
-Menu: one submenu under Setup for Harness (enable unit, permission preset, open overlay, dump-config in a terminal). Do not add aliases. Do not replace Setup > Defaults > Agent; that picker remains the coding CLI.
-
-Keybind: a new binding that summons the overlay. Do not steal `Super + Shift + Ctrl + A` from the coding-agent launcher.
+Menu / keybind for the overlay are Phase 2. Do not steal `Super + Shift + Ctrl + A` from the coding-agent launcher. Do not replace Setup > Defaults > Agent.
 
 ### 9. Packaging and runtime
 
 Node is a new runtime invariant for this feature, not for the rest of Omarchy.
 
-- Ship a pinned Node (mise or a distro package — open question) sufficient for upstream's `^22.19.0 \|\| >=24`.
-- Ship the `dsh-omarchy` overlay as files under `$OMARCHY_PATH/harness/` and a small installer that `pnpm install --prod` (or a prebundled `node_modules` in the package) into the user's Harness home on first enable.
+- Ship pinned Node 22 LTS at `/usr/lib/omarchy-harness/node/`.
+- Ship the production bundle (lockfile + `node_modules` + `integrity.json`) at `/usr/lib/omarchy-harness/bundle/`. The git tree holds overlay source and `integrity.json`; the Arch package (or a release artifact) holds the hashed `node_modules`. Checkout tests run the overlay as Node modules with the test runner's `node`, never by downloading at test time.
 - Do not add TypeScript to `bin/`, `install/`, or `migrations/`. Those stay bash. The overlay is a bounded tree with its own tests.
-- Commands: `omarchy-harness-*` with group `harness` added to `GROUP_DESCRIPTIONS`. Hidden plumbing (`omarchy-harness-host`) is fine; user-facing verbs are `status`, `run`, `prompt`, `enable`, `disable`, `preset`.
+- Commands: `omarchy-harness-*` with group `harness` added to `GROUP_DESCRIPTIONS`. Hidden plumbing (`omarchy-harness-host`) is fine.
 
-`omarchy-provision-first-run` enables the user unit only after Node and the overlay are present; the unit's `Condition*` keeps it inert otherwise. A migration enables it for existing users who opt in, not for everyone on upgrade — Harness is preview, and a surprise control plane on `omarchy update` is unacceptable.
+`omarchy-provision-first-run` does not enable the unit in Phase 1. `ConditionPathExists` on the pinned Node keeps a stray enable inert.
 
 ### 10. Relationship to other plans
 
-- **dots** (`plans/dots.md`): Harness mutations of `~/.config` are exactly the events dots should snapshot. A later hook can commit after an `omarchy/dispatch` that touched config. v1 does not implement dots.
+- **dots** (`plans/dots.md`): Harness mutations of `~/.config` are exactly the events dots should snapshot. v1 does not implement dots.
 - **backup** (`plans/backup.md`): system tools that restore or reinstall must consider backup state; they do not replace it.
 - **server** (`plans/server.md`): a future `omarchy` profile without the Quickshell overlay, using the BBS menu as an ACP client, is the headless story. Not v1.
 
 ## Rollout
 
-### Phase 0 — this document
+### Phase 0 — design (done)
 
-Lock the inversion, the seam list, the tool policy classes, and the non-goals. No code until the design is accepted.
+Lock the inversion, the seam list, the tool policy classes, the frozen v1 decisions, and the non-goals.
 
-### Phase 1 — host and CLI, no desktop UI
+### Phase 1 — frozen minimum (this implementation)
 
-- `harness/` overlay package: profile, bundle patch, `ctx.omarchy.dispatch` + `ctx.omarchy.session` (read-only), observe tools only.
-- Pin `dsh`, `omarchy-harness.service`, `omarchy harness status|dump-config|prompt`.
-- Tests: CLI metadata; unit tests that dispatch allowlists and reject hidden/interactive routes; a fake `omarchy` on `PATH` so tests do not need Hyprland.
-- Manual: one page, opt-in, "this is a preview."
+Prove: **Harness can turn "Omarchy current state" into typed, logged, resumable session facts without changing desktop behavior.**
+
+```text
+Phase 1
+
+Host
+  └─ profile omarchy
+       ├─ ctx.omarchy.session       READ
+       ├─ ctx.omarchy.commands      READ
+       └─ ctx.omarchy.dispatch      READONLY
+
+CLI
+  ├─ omarchy harness status
+  ├─ omarchy harness prompt
+  └─ omarchy harness dump-config
+
+Service
+  └─ omarchy-harness.service
+       ├─ user
+       ├─ graphical-session.target
+       ├─ restart
+       └─ fail closed
+       └─ not enabled at first-run
+
+Tools
+  ├─ omarchy_status
+  ├─ omarchy_commands
+  ├─ omarchy_windows
+  ├─ omarchy_theme_list
+  ├─ omarchy_font_list
+  └─ omarchy_plugin_list
+
+Tests
+  ├─ fake omarchy
+  ├─ fake Hyprland
+  ├─ hidden route rejected
+  ├─ interactive route rejected
+  ├─ write route impossible
+  ├─ service-down safe
+  └─ model-visible observation logged
+```
+
+**Do not in Phase 1:** overlay, approval UI, package/update/snapshot, remote provider, `dispatch.write`, `omarchy_cli`, first-run enable, network install of `dsh`.
 
 ### Phase 2 — session-local writes and approval
 
-- Theme / launch / capture / toggle / notify tools.
-- `ctx.approval` → notification card + overlay buttons.
-- Permission presets. Default `session`.
-- Shell overlay v1: transcript, tool cards, approve/deny.
+- `dispatch.write`, session tools, ACP approval cards, overlay v1, permission presets. Default stored preset `session`.
 - Visual verification of overlay, approval card, and theme-set roundtrip per `agents/skills/visual-verification.md`.
+- Side-channel for approval is still forbidden unless ACP is proven insufficient, and that proof updates this document.
 
 ### Phase 3 — system writes
 
-- pkg, update, snapshot, power. Snapshot-before-update. `pkexec` path with no TTY.
+- `dispatch.system`: pkg, update, snapshot, power. Snapshot-before-update. `pkexec` path with no TTY.
 - Crash-diagnosis path that can target the OS preset.
-- Subagent: OS preset may spawn the user's default coding CLI (or a Harness coding preset) into `~/Work` without giving that child the system tool catalog.
+- Subagent: OS preset may spawn the user's default coding CLI into `~/Work` without giving that child the system tool catalog.
 
 ### Phase 4 — harden and default-off → default-on
 
@@ -296,33 +432,37 @@ Only after the overlay has been the daily driver on real machines: enable the un
 
 Automated tests stay in this repo's existing runners. Graphical checks follow the acceptance and visual-verification skills.
 
-| Case | Layer | Expect |
-|---|---|---|
-| `omarchy commands --check` after adding `harness` group | CLI | metadata valid, no route collisions |
-| observe tool lists theme without spawning a shell pipeline | overlay unit | fake dispatcher called with `theme list` or session provider |
-| `omarchy_cli` on a hidden command | overlay unit | denied, no subprocess |
-| `omarchy_cli` on `omarchy setup security fingerprint` | overlay unit | rejected as interactive |
-| session tool `omarchy_theme_set` under preset `observe` | overlay unit | `tools/pre-execute` deny, no dispatcher call |
-| system tool without approval responder | overlay unit | fail closed |
-| privilege: TTY present | overlay unit | `sudo` path selected |
-| privilege: no TTY | overlay unit | `pkexec` path selected |
-| model-visible status injected | overlay unit | corresponding `omarchy/status` (or equivalent) in the log; replay reconstructs it |
-| user unit inactive | CLI | `omarchy harness status` nonzero; desktop otherwise healthy |
-| overlay summons when host down | shell test | error state, no hang |
-| approval card punches DND | shell test | `app_name` is `omarchy-action` |
-| visual: overlay + theme change + approval | running UI / acceptance VM | see visual-verification skill |
+| Case | Layer | Phase | Expect |
+|---|---|---|---|
+| `omarchy commands --check` after adding `harness` group | CLI | 1 | metadata valid, no route collisions |
+| `dump-config` prints provenance (dsh, node, bundle hash, overlay=acp) | CLI / overlay unit | 1 | required keys present |
+| observe tool lists theme without a shell pipeline | overlay unit | 1 | fake dispatcher called with `theme list` |
+| hidden route | overlay unit | 1 | denied, no subprocess |
+| interactive route (`setup …`) | overlay unit | 1 | rejected as interactive |
+| write route (`theme set`, `pkg add`) | overlay unit | 1 | **impossible**: no `dispatch.write`; readonly execute throws |
+| `dispatch.write` / `dispatch.system` | overlay unit | 1 | properties absent |
+| ephemeral status poll | overlay unit | 1 | no `omarchy/status` event |
+| model-visible status | overlay unit | 1 | `omarchy/status` with snapshot identity; duplicate identity not re-logged |
+| user unit inactive | CLI | 1 | `omarchy harness status` nonzero; desktop otherwise healthy |
+| prompt with host down / no unit | CLI | 1 | still logs observe facts via one-shot host; no desktop mutation |
+| overlay summons when host down | shell test | 2 | error state, no hang |
+| session tool under preset `observe` | overlay unit | 2 | `tools/pre-execute` deny |
+| system tool without approval responder | overlay unit | 2/3 | fail closed |
+| privilege TTY / no TTY | overlay unit | 2 | `sudo` / `pkexec` |
+| approval card punches DND | shell test | 2 | `app_name` is `omarchy-action` |
+| visual: overlay + theme change + approval | running UI / acceptance VM | 2 | see visual-verification skill |
 
 Do not run graphical acceptance in `./test/all`. Host tests must not require a live compositor; provider fakes are the seam's purpose.
 
 ## Open questions
 
-1. **Node shipping**: mise-managed pinned Node vs an Arch package vs a vendored runtime. Production Omarchy currently treats mise as the way optional CLIs arrive; a session `WantedBy=graphical-session.target` wants the runtime on disk before first login.
-2. **Prebundle vs install-on-enable**: a full `node_modules` in the Arch package is large and brittle; a first-enable fetch needs network and makes offline ISO installs sad. Likely: vendor a prod bundle in the package, hash-pin it.
-3. **ACP vs a private Unix protocol** for the overlay: ACP is the open client protocol and keeps the door open for Zed/editor attachments. If ACP cannot carry Omarchy approval cards cleanly, we speak ACP for turns and a small side-channel for `ctx.approval` / `ctx.userQuestions`.
-4. **Upstream pin cadence**: follow a named `dsh` version; who runs the canary, and does `omarchy update` ever bump it automatically?
-5. **Multi-user**: each graphical user has their own user unit and `$DSH_HOME`. Root never runs the host. Is a system-wide Harness (for the Server plan's sysop) a different profile, or out of scope forever?
-6. **Local models**: Ollama / LM Studio already exist in the menu. Should `ctx.llm` default to a local OpenAI-compatible endpoint when one is up, or stay cloud-first with DeepSeek's adapter?
-7. **Edition predicate**: `omarchy-edition-harness` as a third edition is tempting and wrong for v1. Keep it a feature on desktop until the Server plan needs a headless profile.
+Decided in Rev 2: Node shipping, prebundled `node_modules`, ACP-first, manual `dsh` bump. See Frozen v1 decisions.
+
+Still open (not Phase 1):
+
+1. **Multi-user**: each graphical user has their own user unit and `$DSH_HOME`. Root never runs the host. Is a system-wide Harness (for the Server plan's sysop) a different profile, or out of scope forever?
+2. **Local models**: Ollama / LM Studio already exist in the menu. Should `ctx.llm` default to a local OpenAI-compatible endpoint when one is up, or stay cloud-first with DeepSeek's adapter? Phase 1 has no model turn.
+3. **Exact `dsh` version string** for the first vendored bundle. `integrity.json` holds the pin; the first packaging PR fills commit SHA and lockfile hash against a real artifact. Until then dump-config reports the intended pin and the overlay source hash.
 
 ## Non-goals (v1)
 
@@ -333,3 +473,5 @@ Do not run graphical acceptance in `./test/all`. Host tests must not require a l
 - Unifying Cordis plugins with Quickshell `manifest.json` plugins
 - Shipping a custom LLM
 - Changing how coding-agent CLIs launch
+- Logging every GUI keybind into the Harness session
+- Enabling the user unit for everyone on `omarchy update`
