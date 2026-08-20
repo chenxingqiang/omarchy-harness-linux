@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Rev 7 catalog is executable. Phase 3 is not opened: dispatch.write still does not exist.
+# Rev 7 catalog is the closed L1 set. Phase 3 makes those eight ops executable; L2 stays unrepresentable.
 
 set -euo pipefail
 
@@ -85,7 +85,7 @@ assertDeepEqual(Object.keys(surface).sort(), expectedL1, 'closed write surface h
 assertEqual(surface.execute, undefined, 'closed write surface has no execute')
 assertEqual(surface.shell, undefined, 'closed write surface has no shell')
 assertEqual(surface['pkg.add'], undefined, 'closed write surface has no pkg.add')
-assertEqual(surface['theme.set'].executable, false, 'L1 catalog is not executable in Phase 2')
+assertEqual(surface['theme.set'].executable, true, 'L1 catalog is executable in Phase 3')
 assert(Object.isFrozen(surface), 'closed write surface is frozen')
 
 assertEqual(mutations.validateArgs('notify.send', { headline: 'hi', exec: 'rm -rf /' }).ok, false, 'notify.send rejects exec')
@@ -105,20 +105,24 @@ const harness = createHarness({
     fail('catalog review must not call hyprctl')
   },
 })
-assert(harness.dispatch.write === undefined, 'Phase 2 still has no dispatch.write')
-assert(harness.dispatch.system === undefined, 'Phase 2 still has no dispatch.system')
+assert(harness.dispatch.write !== undefined, 'Phase 3 L1 has dispatch.write')
+assert(harness.dispatch.write.execute === undefined, 'dispatch.write has no generic execute')
+assert(harness.dispatch.system === undefined, 'Phase 3 still has no dispatch.system')
 assertDeepEqual(harness.mutations.l1Names().sort(), expectedL1, 'harness exposes the L1 catalog')
 
 const config = harness.dumpConfig()
-assertEqual(config.dispatch, 'readonly', 'dump-config dispatch stays readonly')
-assertEqual(config.write, false, 'dump-config write is false')
-assertEqual(config.l1_surface, 'catalog', 'dump-config reports the L1 catalog')
+assertEqual(config.dispatch, 'l1', 'dump-config dispatch is l1')
+assertEqual(config.write, true, 'dump-config write is true')
+assertEqual(config.system, false, 'dump-config system is false')
+assertEqual(config.l1_surface, 'executable', 'dump-config reports the executable L1 surface')
 assertDeepEqual(config.l1.sort(), expectedL1, 'dump-config lists the L1 names')
 
 const init = harness.acp.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' })
-assertEqual(init.result.write, false, 'ACP still does not advertise write')
+assertEqual(init.result.write, true, 'ACP advertises L1 write')
+assertEqual(init.result.system, false, 'ACP does not advertise system write')
 assertDeepEqual(init.result.l1.sort(), expectedL1, 'ACP initialize advertises the L1 catalog')
-assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tools still have no write tools')
+assert(init.result.tools.includes('theme.set'), 'ACP tools include finite L1 ops')
+assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tools still have no untyped write alias')
 
 const writeCall = harness.acp.handle({
   jsonrpc: '2.0',
@@ -126,14 +130,14 @@ const writeCall = harness.acp.handle({
   method: 'tools/call',
   params: { name: 'omarchy_theme_set', arguments: { theme: 'Tokyo Night' } },
 })
-assertEqual(writeCall.error.message, 'WRITE_ROUTE_IMPOSSIBLE', 'catalog does not make theme.set callable')
+assertEqual(writeCall.error.message, 'L2_UNREPRESENTABLE', 'untyped theme.set alias remains unrepresentable')
 JS
 
 : >"$MUTATION_LOG"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
-echo "$dump_json" | jq -e '.dispatch == "readonly" and .write == false and .l1_surface == "catalog" and (.l1 | length == 8)' >/dev/null
-pass "dump-config reports an unopened L1 catalog"
+echo "$dump_json" | jq -e '.dispatch == "l1" and .write == true and .system == false and .l1_surface == "executable" and (.l1 | length == 8)' >/dev/null
+pass "dump-config reports an executable L1 surface without system write"
 
 if [[ -s $MUTATION_LOG ]]; then
   fail "L1 catalog review does not mutate Omarchy" "$(cat "$MUTATION_LOG")"

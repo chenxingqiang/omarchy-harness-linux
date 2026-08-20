@@ -140,9 +140,11 @@ const harness = createHarness({
   now: () => '2026-08-20T00:00:00.000Z',
 })
 
-assert(harness.dispatch.write === undefined, 'Phase 1 has no dispatch.write')
+assert(harness.dispatch.write !== undefined, 'Phase 3 L1 has dispatch.write')
 assert(harness.dispatch.system === undefined, 'Phase 1 has no dispatch.system')
+assert(harness.dispatch.write.execute === undefined, 'dispatch.write has no generic execute')
 assert(Object.isFrozen(harness.dispatch), 'dispatch object is frozen')
+assert(Object.isFrozen(harness.dispatch.write), 'dispatch.write is frozen')
 
 const listed = harness.dispatch.readonly.execute('theme list')
 assertEqual(listed.stdout, 'Tokyo Night\n', 'readonly dispatch runs theme list')
@@ -200,9 +202,11 @@ for (const key of ['profile', 'dsh', 'dsh_commit', 'node', 'bundle_sha256', 'pre
 assertEqual(config.profile, 'omarchy', 'dump-config profile is omarchy')
 assertEqual(config.overlay, 'acp', 'dump-config overlay protocol is acp')
 assertEqual(config.approval, 'acp', 'dump-config approval protocol is acp')
-assertEqual(config.phase, 2, 'dump-config phase is 2')
-assertEqual(config.dispatch, 'readonly', 'dump-config dispatch is readonly')
+assertEqual(config.phase, 3, 'dump-config phase is 3')
+assertEqual(config.dispatch, 'l1', 'dump-config dispatch is l1')
 assertEqual(config.session_write, true, 'dump-config session_write is true')
+assertEqual(config.write, true, 'dump-config write is true')
+assertEqual(config.system, false, 'dump-config system is false')
 assert(String(config.bundle_sha256).length === 64, 'bundle hash is sha256 hex')
 
 const themes = harness.tools.omarchy_theme_list()
@@ -212,12 +216,13 @@ assert(commandHits.some((entry) => entry.name === 'list'), 'omarchy_commands fil
 assert(!commandHits.some((entry) => entry.hidden), 'omarchy_commands omits hidden commands')
 
 const init = harness.acp.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' })
-assertEqual(init.result.dispatch, 'readonly', 'ACP initialize advertises readonly dispatch')
-assertEqual(init.result.write, false, 'ACP initialize does not advertise write')
+assertEqual(init.result.dispatch, 'l1', 'ACP initialize advertises L1 dispatch')
+assertEqual(init.result.write, true, 'ACP initialize advertises L1 write')
 assertEqual(init.result.system, false, 'ACP initialize does not advertise system')
 assertEqual(init.result.sessionWrite, true, 'ACP initialize advertises session write')
-assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tool list has no write tools')
+assert(!init.result.tools.includes('omarchy_theme_set'), 'ACP tool list has no untyped write alias')
 assert(init.result.tools.includes('omarchy_status'), 'ACP tool list includes omarchy_status')
+assert(init.result.tools.includes('theme.set'), 'ACP tool list includes finite L1 ops')
 
 const created = harness.acp.handle({ jsonrpc: '2.0', id: 2, method: 'session/new' })
 assertEqual(created.result.sessionId, 'omarchy-session', 'ACP session/new returns a session id')
@@ -228,7 +233,7 @@ const writeCall = harness.acp.handle({
   method: 'tools/call',
   params: { name: 'omarchy_theme_set', arguments: { theme: 'tokyo-night' } },
 })
-assertEqual(writeCall.error.message, 'WRITE_ROUTE_IMPOSSIBLE', 'ACP tools/call cannot invoke a write tool')
+assertEqual(writeCall.error.message, 'L2_UNREPRESENTABLE', 'ACP tools/call cannot invoke an untyped write tool')
 
 const statusCall = harness.acp.handle({
   jsonrpc: '2.0',
@@ -239,7 +244,9 @@ const statusCall = harness.acp.handle({
 assert(Array.isArray(statusCall.result.content), 'ACP tools/call runs a readonly tool')
 
 const profile = requireFromRoot('harness/lib/acp.js').loadProfile()
-assertEqual(profile.dispatch, 'readonly', 'omarchy profile is readonly')
+assertEqual(profile.dispatch, 'l1', 'omarchy profile is the L1 write surface')
+assertEqual(profile.write, true, 'omarchy profile advertises L1 write')
+assertEqual(profile.system, false, 'omarchy profile does not advertise system write')
 assertEqual(profile.clients.overlay, 'acp', 'overlay is an ACP client')
 assertEqual(profile.clients.cli, 'acp', 'harness CLI is an ACP client')
 assertEqual(profile.clients.menu, 'data-plane', 'menu stays on the data plane')
@@ -261,11 +268,11 @@ dump=$("$ROOT/bin/omarchy-harness-dump-config")
 [[ $dump == *"profile: omarchy"* ]] || fail "dump-config prints profile" "$dump"
 [[ $dump == *"overlay: acp"* ]] || fail "dump-config prints overlay=acp" "$dump"
 [[ $dump == *"approval: acp"* ]] || fail "dump-config prints approval=acp" "$dump"
-[[ $dump == *"dispatch: readonly"* ]] || fail "dump-config prints dispatch=readonly" "$dump"
+[[ $dump == *"dispatch: l1"* ]] || fail "dump-config prints dispatch=l1" "$dump"
 pass "dump-config prints runtime provenance"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
-echo "$dump_json" | jq -e '.profile == "omarchy" and .overlay == "acp" and .dispatch == "readonly" and .clients.menu == "data-plane" and .clients.overlay == "acp"' >/dev/null
+echo "$dump_json" | jq -e '.profile == "omarchy" and .overlay == "acp" and .dispatch == "l1" and .write == true and .system == false and .clients.menu == "data-plane" and .clients.overlay == "acp"' >/dev/null
 pass "dump-config --json is structured provenance"
 
 status=0

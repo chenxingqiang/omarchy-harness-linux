@@ -24,7 +24,8 @@ function loadProfile() {
   return JSON.parse(fs.readFileSync(PROFILE_PATH, 'utf8'))
 }
 
-function callSessionTool(store, name, args) {
+function callSessionTool(harness, name, args) {
+  const store = harness.store
   if (name === 'session_metadata') {
     return store.write({ type: 'metadata', patch: { title: args.title || '' } })
   }
@@ -41,11 +42,16 @@ function callSessionTool(store, name, args) {
     return store.write({ type: 'reset' })
   }
   if (name === 'approval_decide') {
-    return store.decide(args.approvalId, args.decision)
+    const decide = harness.decide || ((id, decision) => store.decide(id, decision))
+    return decide(args.approvalId, args.decision)
   }
   const error = new Error('unknown session tool')
   error.code = 'UNKNOWN_TOOL'
   throw error
+}
+
+function l1ToolNames() {
+  return mutations.l1Names()
 }
 
 function jsonRpcResult(id, result) {
@@ -65,20 +71,21 @@ function createAcpSession(harness) {
   let sessionId = null
 
   function initialize(id) {
+    const tools = READONLY_TOOLS.concat(SESSION_TOOLS, l1ToolNames())
     return jsonRpcResult(id, {
       protocolVersion: 1,
       serverInfo: {
         name: 'omarchy-harness',
-        phase: 2,
+        phase: harness.phase || 3,
       },
       capabilities: {
         loadSession: true,
         promptCapabilities: { image: false, audio: false, embeddedContext: false },
       },
       profile: profile.name,
-      dispatch: 'readonly',
-      tools: READONLY_TOOLS.concat(SESSION_TOOLS),
-      write: false,
+      dispatch: profile.dispatch || 'l1',
+      tools,
+      write: true,
       system: false,
       sessionWrite: true,
       l1: mutations.l1Names(),
@@ -100,15 +107,23 @@ function createAcpSession(harness) {
     }
     if (SESSION_TOOLS.includes(name) && harness.store) {
       try {
-        const content = callSessionTool(harness.store, name, args)
+        const content = callSessionTool(harness, name, args)
         return jsonRpcResult(id, { content, isError: false })
       } catch (error) {
         return jsonRpcError(id, -32003, error.code || error.message, { tool: name })
       }
     }
-    return jsonRpcError(id, -32001, 'WRITE_ROUTE_IMPOSSIBLE', {
+    if (l1ToolNames().includes(name) && harness.write && typeof harness.write[name] === 'function') {
+      try {
+        const content = harness.write[name](args)
+        return jsonRpcResult(id, { content, isError: false })
+      } catch (error) {
+        return jsonRpcError(id, -32001, error.code || error.message, { tool: name })
+      }
+    }
+    return jsonRpcError(id, -32001, 'L2_UNREPRESENTABLE', {
       tool: name,
-      dispatch: 'readonly',
+      dispatch: 'l1',
     })
   }
 
@@ -162,8 +177,9 @@ function createAcpSession(harness) {
       return storeCall(id, () => harness.store.state())
     }
     if (method === 'approval/decide') {
+      const decide = harness.decide || ((approvalId, decision) => harness.store.decide(approvalId, decision))
       return storeCall(id, () =>
-        harness.store.decide(params && params.approvalId, params && params.decision)
+        decide(params && params.approvalId, params && params.decision)
       )
     }
     if (method === 'ping') {
@@ -175,7 +191,7 @@ function createAcpSession(harness) {
   return {
     handle,
     profile,
-    tools: READONLY_TOOLS.concat(SESSION_TOOLS),
+    tools: READONLY_TOOLS.concat(SESSION_TOOLS, l1ToolNames()),
   }
 }
 

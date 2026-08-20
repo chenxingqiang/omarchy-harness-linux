@@ -26,7 +26,13 @@ function emptyState() {
 }
 
 function requiresApproval(mutation) {
-  return mutation && mutation.type === 'reset'
+  if (!mutation) {
+    return false
+  }
+  if (mutation.type === 'reset') {
+    return true
+  }
+  return mutation.type === 'l1' && mutation.ask === true
 }
 
 function applyEvent(state, event) {
@@ -239,10 +245,15 @@ function createSessionStore(options = {}) {
       decision,
       reason: reason || 'user',
     })
-    if (decision === 'allow') {
+    if (decision === 'allow' && pending.mutation.type !== 'l1') {
       applyMutation(pending.mutation)
     }
-    return { ok: true, idempotent: false, decision: recorded }
+    return {
+      ok: true,
+      idempotent: false,
+      decision: recorded,
+      mutation: pending.mutation,
+    }
   }
 
   function resume(sessionId) {

@@ -1,8 +1,8 @@
 # Plan: Omarchy Harness — the OS as a DeepSeek Harness profile
 
-Revision 6 is the **Phase 2 freeze point**. Rev 7 is the **L1 surface review**. The v0 table now lives in `harness/lib/mutations.js` as a closed, non-executable catalog. Frozen architecture is not reopened. **Phase 3 is not opened and not authorized.** `dispatch.write` still does not exist. Mermaid diagrams are unchanged.
+Revision 6 is the **Phase 2 freeze point**. Rev 7 is the **L1 surface review**. Rev 8 opens **Phase 3 L1**: the v0 table in `harness/lib/mutations.js` is the executable `dispatch.write` method set. Frozen architecture is not reopened. **L2 stays unrepresentable.** `dispatch.system` still does not exist. Mermaid diagrams are unchanged.
 
-**Status:** Rev 6 / Phase 2 Freeze remains the baseline. Rev 7 classifies a finite L1 set and proves L2 is unrepresentable on that set. The sole Phase 3 proof, when that phase opens, is: **even with `dispatch.write` fully available, Harness still cannot cross L1 → L2.**
+**Status:** Rev 6 / Phase 2 Freeze remains the session-control-plane baseline. Rev 7 classified a finite L1 set. Rev 8 makes those eight operations callable. The sole Phase 3 proof is: **even with `dispatch.write` fully available, Harness still cannot cross L1 → L2.**
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -481,7 +481,7 @@ That is the sole focus of the next Phase 3 review. A write that needs privilege,
 
 L0 is Phase 1 (frozen). Session-log writes with session-level approval are Phase 2 (frozen). L1 is the v0 table in the L1 surface review. L2 is `dispatch.system` and always runs `snapshot → approval → execute → audit`. Informal candidates map onto that table as: theme switch → `theme.set`; notification → `notify.send`; session-level toggle → `toggle.*`; already-allowed launch → `launch.terminal` / `launch.browser` with empty argv; window/workspace move stays held until a typed Omarchy effector exists.
 
-The L1 table is encoded in `harness/lib/mutations.js` as a closed catalog. It is **not executable**. `dispatch.write` remains absent. Until a later revision opens Phase 3, `dispatch.write` and `dispatch.system` stay absent.
+The L1 table is encoded in `harness/lib/mutations.js` as a closed catalog and exposed as `dispatch.write`. Each method maps to a typed Omarchy effector argv. `dispatch.write.execute`, `dispatch.write.shell`, and `dispatch.system` remain absent. Unknown names fail closed as `L2_UNREPRESENTABLE`.
 
 Phase 3 entry criteria (all must already be true before any OS mutation exists):
 
@@ -497,7 +497,7 @@ Phase 3 Entry Criteria
 ✓ no generic dispatcher exists
 ```
 
-### L1 surface review (Rev 7, not authorized)
+### L1 surface (Rev 8: executable)
 
 L1 operations call **existing Omarchy effectors**. They do not gain `hyprctl <string>`, `omarchy <route>`, or a shell. If a desktop act has no typed Omarchy command yet, it stays off `dispatch.write` until the data plane grows that command.
 
@@ -1073,13 +1073,13 @@ Phase 2
 
 The overlay is an ACP/host client: it reads `session state` and posts allow/deny through `omarchy-harness-host` one-shot commands, so it works while the user unit stays opt-in. If the host binary cannot answer, the overlay shows an error and leaves the desktop unchanged. Fork/resume persist the active session id in the session directory so a later one-shot CLI follows the same session.
 
-### Phase 3 — unopened: new security boundary
+### Phase 3 L1 — opened: finite desktop write, L2 unrepresentable
 
-Phase 3 is not opened in this revision. It is not a continuation of Phase 2 privilege. It is the first OS-side-effect release gate, and only after the Phase 3 entry criteria above are already true.
+Phase 3 is a new security boundary, not a widening of Phase 2 privilege. L1 v0 is now callable. `dispatch.system` is still absent. The user unit is still not enabled at first-run.
 
-The first cut classifies mutations (L0 / L1 / L2). L1 is the finite v0 table in the L1 surface review, not a dispatcher permission switch. Implementation of that table is not authorized in this revision. The sole Phase 3 proof remains: a fully available `dispatch.write` still cannot cross L1 → L2.
+The sole Phase 3 proof is: a fully available `dispatch.write` still cannot cross L1 → L2. There is no generic execute, no shell, no hyprctl string, no pkg/update/reboot, and no write into `/etc` or `/usr`.
 
-Until that review approves a typed subset, `dispatch.write` and `dispatch.system` stay absent. Crash-diagnosis against an OS preset, and spawning a coding CLI into `~/Work` without the system catalog, wait on the same boundary.
+Crash-diagnosis against an OS preset, and spawning a coding CLI into `~/Work` without the system catalog, wait on `dispatch.system`.
 
 ### Phase 4 — harden and default-off → default-on
 
@@ -1112,6 +1112,9 @@ Automated tests stay in this repo's existing runners. Graphical checks follow th
 | overlay QML is an ACP client | shell test | 2 | open/close, approve/deny call the host |
 | visual: overlay + approval card | running UI | 2 | visual-verification skill when a compositor is present |
 | `dispatch.write` cannot represent an L2 operation | overlay unit | 3 | pkg/update/shell/`/etc` remain unrepresentable after L1 exists |
+| finite L1 ops call typed Omarchy effectors | overlay unit | 3 | `theme.set` → `omarchy theme set <name>`; no hyprctl string |
+| launch ops ask before exec | overlay unit | 3 | deny and idempotent allow do not re-launch |
+| ACP/CLI write surface | CLI | 3 | `write: true`, `system: false`, `dispatch: l1` |
 
 Do not run graphical acceptance in `./test/all`. Host tests must not require a live compositor; provider fakes are the seam's purpose.
 
@@ -1119,7 +1122,7 @@ Do not run graphical acceptance in `./test/all`. Host tests must not require a l
 
 Decided in Rev 2: Node shipping, prebundled `node_modules`, ACP-first, manual `dsh` bump. See Frozen v1 decisions.
 
-Still open (not the Session Control Plane MVP. Rev 7 reviewed the L1 v0 table; it is not authorized. Do not reopen Control Plane / Data Plane / Session Log / Overlay):
+Still open (not the Session Control Plane MVP. Rev 8 executes the L1 v0 table. Do not reopen Control Plane / Data Plane / Session Log / Overlay):
 
 1. **Multi-user**: each graphical user has their own user unit and `$DSH_HOME`. Root never runs the host. Is a system-wide Harness (for the Server plan's sysop) a different profile, or out of scope forever?
 2. **Local models**: Ollama / LM Studio already exist in the menu. Should `ctx.llm` default to a local OpenAI-compatible endpoint when one is up, or stay cloud-first with DeepSeek's adapter? Phase 1 has no model turn.

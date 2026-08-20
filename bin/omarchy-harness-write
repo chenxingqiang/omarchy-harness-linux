@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# omarchy:summary=Execute a finite L1 desktop write through Harness
+# omarchy:group=harness
+# omarchy:name=write
+# omarchy:args=<op> [json]
+# omarchy:examples=omarchy harness write theme.set '{"theme":"Tokyo Night"}'
+
+if (($# == 0)); then
+  echo "Usage: omarchy harness write <op> [json]" >&2
+  exit 2
+fi
+
+exec omarchy-harness-host write "$@"

@@ -213,6 +213,68 @@ function createHarness(options = {}) {
     now,
   })
 
+  function runL1(name, args = {}) {
+    const argv = mutations.argvFor(name, args)
+    const result = exec(argv)
+    const spec = mutations.contract(name)
+    store.append({
+      type: spec.auditEvent,
+      op: name,
+      args,
+      argv,
+      status: result.status == null ? 1 : result.status,
+    })
+    const status = result.status == null ? 1 : result.status
+    return {
+      ok: status === 0,
+      status,
+      stdout: result.stdout || '',
+      stderr: result.stderr || '',
+    }
+  }
+
+  function writeOp(name, args = {}) {
+    const spec = mutations.contract(name)
+    if (!spec) {
+      const error = new Error('L2_UNREPRESENTABLE')
+      error.code = 'L2_UNREPRESENTABLE'
+      error.op = name
+      throw error
+    }
+    const validated = mutations.validateArgs(name, args)
+    if (!validated.ok) {
+      const error = new Error(validated.code)
+      error.code = validated.code
+      error.fields = validated.fields
+      throw error
+    }
+    if (spec.approval === 'optional-ask') {
+      return store.write({ type: 'l1', op: name, args, ask: true })
+    }
+    return runL1(name, args)
+  }
+
+  const writeMethods = {}
+  for (const name of mutations.l1Names()) {
+    writeMethods[name] = (args = {}) => writeOp(name, args)
+  }
+
+  function decide(approvalId, decision) {
+    const result = store.decide(approvalId, decision)
+    if (
+      result &&
+      result.ok &&
+      !result.idempotent &&
+      result.decision &&
+      result.decision.decision === 'allow' &&
+      result.mutation &&
+      result.mutation.type === 'l1'
+    ) {
+      result.executed = runL1(result.mutation.op, result.mutation.args || {})
+    }
+    return result
+  }
+
   const dispatch = Object.freeze({
     readonly: Object.freeze({
       execute(route, args = []) {
@@ -231,6 +293,7 @@ function createHarness(options = {}) {
         return exec(['omarchy', ...normalizeRoute(route).split(' '), ...args])
       },
     }),
+    write: Object.freeze(writeMethods),
   })
 
   function readStdout(route, args) {
@@ -346,10 +409,11 @@ function createHarness(options = {}) {
       approval: integrity.approval,
       overlay: integrity.overlay,
       phase: integrity.phase,
-      dispatch: 'readonly',
+      dispatch: profile.dispatch || 'l1',
       session_write: true,
-      write: false,
-      l1_surface: 'catalog',
+      write: true,
+      system: false,
+      l1_surface: 'executable',
       l1: mutations.l1Names(),
       clients: profile.clients,
       tools: profile.tools,
@@ -390,12 +454,21 @@ function createHarness(options = {}) {
     }
   }
 
-  const acp = createAcpSession({ tools, prompt, store, mutations })
+  const acp = createAcpSession({
+    tools,
+    prompt,
+    store,
+    mutations,
+    decide,
+    write: dispatch.write,
+    phase: integrity.phase,
+  })
 
   return {
     acp,
     classifyRoute,
     commands,
+    decide,
     dispatch,
     dumpConfig,
     log,
@@ -423,6 +496,7 @@ function printDumpConfig(config) {
     'dispatch',
     'session_write',
     'write',
+    'system',
     'l1_surface',
   ]) {
     const value = config[key] == null ? '' : config[key]
@@ -496,6 +570,30 @@ function runCli(argv, options = {}) {
     return { status: 2, stdout: '', stderr: 'Usage: omarchy-harness-host session state|checkpoint|metadata|reset|resume|fork\n' }
   }
 
+  if (command === 'write') {
+    const name = argv[1]
+    const raw = argv[2] || '{}'
+    if (!name) {
+      return { status: 2, stdout: '', stderr: 'omarchy-harness-host: write <op> [json]\n' }
+    }
+    try {
+      const method = harness.dispatch.write && harness.dispatch.write[name]
+      if (typeof method !== 'function') {
+        const error = new Error('L2_UNREPRESENTABLE')
+        error.code = 'L2_UNREPRESENTABLE'
+        throw error
+      }
+      const result = method(JSON.parse(raw))
+      return { status: 0, stdout: JSON.stringify(result, null, 2) + '\n' }
+    } catch (error) {
+      return {
+        status: 1,
+        stdout: '',
+        stderr: String(error.code || error.message) + '\n',
+      }
+    }
+  }
+
   if (command === 'approval') {
     const action = argv[1]
     try {
@@ -505,9 +603,10 @@ function runCli(argv, options = {}) {
         if (!approvalId || !decision) {
           return { status: 2, stdout: '', stderr: 'omarchy-harness-host: approval decide <id> allow|deny\n' }
         }
+        const decide = harness.decide || ((id, choice) => harness.store.decide(id, choice))
         return {
           status: 0,
-          stdout: JSON.stringify(harness.store.decide(approvalId, decision), null, 2) + '\n',
+          stdout: JSON.stringify(decide(approvalId, decision), null, 2) + '\n',
         }
       }
     } catch (error) {
@@ -523,7 +622,7 @@ function runCli(argv, options = {}) {
   return {
     status: 2,
     stdout: '',
-    stderr: 'Usage: omarchy-harness-host dump-config|prompt|tool|session|approval|serve\n',
+    stderr: 'Usage: omarchy-harness-host dump-config|prompt|tool|session|approval|write|serve\n',
   }
 }
 

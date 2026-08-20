@@ -1,7 +1,7 @@
 {
   "name": "omarchy",
   "bundles": ["dsh-base", "dsh-omarchy"],
-  "dispatch": "readonly",
+  "dispatch": "l1",
   "sessionWrite": true,
   "clients": {
     "overlay": "acp",
@@ -23,7 +23,15 @@
     "session_fork",
     "session_resume",
     "session_reset",
-    "approval_decide"
+    "approval_decide",
+    "theme.set",
+    "notify.send",
+    "toggle.nightlight",
+    "toggle.bar",
+    "toggle.idle",
+    "window.focus",
+    "launch.terminal",
+    "launch.browser"
   ],
   "l1": [
     "theme.set",
@@ -35,5 +43,6 @@
     "launch.terminal",
     "launch.browser"
   ],
-  "write": false
+  "write": true,
+  "system": false
 }

@@ -176,6 +176,15 @@ function isRepresentableOnWrite(name) {
   return Boolean(L1[normalize(name)])
 }
 
+function codedError(code, extra) {
+  const error = new Error(code)
+  error.code = code
+  if (extra) {
+    Object.assign(error, extra)
+  }
+  return error
+}
+
 function validateArgs(name, args) {
   const key = normalize(name)
   const spec = L1[key]
@@ -190,13 +199,91 @@ function validateArgs(name, args) {
   return { ok: true }
 }
 
+function rejectSmuggled(value, field) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw codedError('FORBIDDEN_ARG', { fields: [field] })
+  }
+  if (/^-|[\n\r;|&`$()]/.test(value)) {
+    throw codedError('FORBIDDEN_ARG', { fields: [field] })
+  }
+}
+
+function argvFor(name, args = {}) {
+  const key = normalize(name)
+  const spec = L1[key]
+  if (!spec) {
+    throw codedError('L2_UNREPRESENTABLE', { op: name })
+  }
+  const validated = validateArgs(key, args)
+  if (!validated.ok) {
+    throw codedError(validated.code, { fields: validated.fields })
+  }
+
+  switch (key) {
+    case 'theme.set':
+      rejectSmuggled(args.theme, 'theme')
+      return ['omarchy', 'theme', 'set', args.theme]
+    case 'notify.send': {
+      rejectSmuggled(args.headline, 'headline')
+      const argv = ['omarchy', 'notification', 'send']
+      if (args.glyph != null && args.glyph !== '') {
+        rejectSmuggled(String(args.glyph), 'glyph')
+        argv.push('-g', String(args.glyph))
+      }
+      if (args.urgency != null && args.urgency !== '') {
+        if (!['low', 'normal', 'critical'].includes(args.urgency)) {
+          throw codedError('FORBIDDEN_ARG', { fields: ['urgency'] })
+        }
+        argv.push('-u', args.urgency)
+      }
+      argv.push(args.headline)
+      if (args.description != null && args.description !== '') {
+        rejectSmuggled(args.description, 'description')
+        argv.push(args.description)
+      }
+      return argv
+    }
+    case 'toggle.nightlight':
+      return ['omarchy', 'toggle', 'nightlight']
+    case 'toggle.bar': {
+      const argv = ['omarchy', 'toggle', 'bar']
+      if (args.state != null && args.state !== '') {
+        if (!['on', 'off', 'toggle'].includes(args.state)) {
+          throw codedError('FORBIDDEN_ARG', { fields: ['state'] })
+        }
+        argv.push(args.state)
+      }
+      return argv
+    }
+    case 'toggle.idle': {
+      const argv = ['omarchy', 'toggle', 'idle']
+      if (args.state != null && args.state !== '') {
+        if (!['stay-awake', 'allow-idle'].includes(args.state)) {
+          throw codedError('FORBIDDEN_ARG', { fields: ['state'] })
+        }
+        argv.push(args.state)
+      }
+      return argv
+    }
+    case 'window.focus':
+      rejectSmuggled(args.app, 'app')
+      return ['omarchy', 'hyprland', 'focus', 'app', args.app]
+    case 'launch.terminal':
+      return ['omarchy', 'launch', 'terminal']
+    case 'launch.browser':
+      return ['omarchy', 'launch', 'browser']
+    default:
+      throw codedError('L2_UNREPRESENTABLE', { op: name })
+  }
+}
+
 function closedWriteSurface() {
   const surface = {}
   for (const name of l1Names()) {
     surface[name] = Object.freeze({
       name,
       layer: 'L1',
-      executable: false,
+      executable: true,
       contract: L1[name],
     })
   }
@@ -208,6 +295,7 @@ module.exports = {
   L0,
   L1,
   L2,
+  argvFor,
   classify,
   closedWriteSurface,
   contract,
