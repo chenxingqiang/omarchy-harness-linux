@@ -4,7 +4,7 @@
   "name": "Harness",
   "version": "1.0.0",
   "author": "Omarchy",
-  "description": "DeepSeek Harness session overlay: observe, session write, and approval",
+  "description": "DeepSeek Harness session overlay: observe, session write, and plane-labeled approval",
   "kinds": [
     "overlay"
   ],

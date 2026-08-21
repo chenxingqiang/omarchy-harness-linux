@@ -270,6 +270,74 @@ function isRepresentableOnSystem(name) {
   return Boolean(L2[normalize(name)])
 }
 
+const APPROVAL_CARD_EXEC = 'omarchy-shell shell summon omarchy.harness'
+const APPROVAL_CARD_HEADLINE = 'Harness needs approval'
+
+function approvalSummary(mutation) {
+  if (!mutation || typeof mutation !== 'object') {
+    return 'Pending approval'
+  }
+  if (mutation.type === 'reset') {
+    return 'Reset this Harness session'
+  }
+  if (mutation.type === 'l1') {
+    if (mutation.op === 'launch.terminal') {
+      return 'Launch the default terminal'
+    }
+    if (mutation.op === 'launch.browser') {
+      return 'Launch the default browser'
+    }
+    return 'Desktop change: ' + String(mutation.op || 'unknown')
+  }
+  if (mutation.type === 'l2') {
+    if (mutation.op === 'pkg.add') {
+      const packages = (mutation.args && mutation.args.packages) || []
+      if (packages.length === 1) {
+        return 'Install package: ' + packages[0]
+      }
+      return 'Install packages'
+    }
+    if (mutation.op === 'pkg.drop') {
+      const packages = (mutation.args && mutation.args.packages) || []
+      if (packages.length === 1) {
+        return 'Remove package: ' + packages[0]
+      }
+      return 'Remove packages'
+    }
+    if (mutation.op === 'update') {
+      return 'Update Omarchy and system packages'
+    }
+    if (mutation.op === 'snapshot.create') {
+      return 'Create a system snapshot'
+    }
+    if (mutation.op === 'snapshot.restore') {
+      return 'Restore a system snapshot'
+    }
+    if (mutation.op === 'system.reboot') {
+      return 'Reboot the system'
+    }
+    if (mutation.op === 'system.shutdown') {
+      return 'Shut down the system'
+    }
+    return 'System change: ' + String(mutation.op || 'unknown')
+  }
+  return 'Pending approval'
+}
+
+function approvalCardArgv(mutation) {
+  return [
+    'omarchy',
+    'notification',
+    'send',
+    '-u',
+    'normal',
+    '--exec',
+    APPROVAL_CARD_EXEC,
+    APPROVAL_CARD_HEADLINE,
+    approvalSummary(mutation),
+  ]
+}
+
 function codedError(code, extra) {
   const error = new Error(code)
   error.code = code
@@ -459,6 +527,10 @@ module.exports = {
   L1,
   L2,
   L2_HELD,
+  APPROVAL_CARD_EXEC,
+  APPROVAL_CARD_HEADLINE,
+  approvalCardArgv,
+  approvalSummary,
   argvFor,
   argvForSystem,
   classify,

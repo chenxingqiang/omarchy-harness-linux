@@ -17,6 +17,7 @@ Item {
   property string statusText: ""
   property var pending: []
   property string sessionTitle: "Untitled session"
+  property string keyboardHint: ""
 
   property color background: Color.menu.background
   property color foreground: Color.menu.text
@@ -58,12 +59,27 @@ Item {
     root.pending = view.pending
     root.sessionTitle = view.title
     root.statusText = view.statusText
+    root.keyboardHint = view.keyboardHint || ""
+  }
+
+  function pendingToneColor(tone) {
+    if (tone === "urgent")
+      return Color.urgent
+    if (tone === "accent")
+      return Color.accent
+    return Color.muted
   }
 
   function decide(approvalId, decision) {
     const binary = decision === "allow" ? "omarchy-harness-approve" : "omarchy-harness-deny"
     Quickshell.execDetached([root.omarchyPath + "/bin/" + binary, approvalId])
     Qt.callLater(root.refresh)
+  }
+
+  function decideFirst(decision) {
+    if (!root.pending.length)
+      return
+    root.decide(root.pending[0].approvalId, decision)
   }
 
   IpcHandler {
@@ -130,6 +146,12 @@ Item {
           } else if (event.key === Qt.Key_R) {
             root.refresh()
             event.accepted = true
+          } else if (event.key === Qt.Key_Y || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            root.decideFirst("allow")
+            event.accepted = true
+          } else if (event.key === Qt.Key_N) {
+            root.decideFirst("deny")
+            event.accepted = true
           }
         }
 
@@ -155,6 +177,15 @@ Item {
             font.pixelSize: Style.font.body
           }
 
+          Text {
+            width: parent.width
+            visible: !root.hostDown
+            text: root.keyboardHint
+            color: Color.muted
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
           Repeater {
             model: root.pending
             delegate: Row {
@@ -162,18 +193,41 @@ Item {
               spacing: Style.spacing.sm
               width: keyCatcher.width
 
-              Text {
-                text: modelData.approvalId
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+              Column {
                 width: parent.width - Style.space(180)
-                elide: Text.ElideMiddle
+                spacing: Style.spacing.xxs
+
+                Text {
+                  text: modelData.badge
+                  color: root.pendingToneColor(modelData.tone)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: modelData.kind === "system"
+                }
+
+                Text {
+                  width: parent.width
+                  text: modelData.summary || modelData.approvalId
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  wrapMode: Text.WordWrap
+                }
+
+                Text {
+                  width: parent.width
+                  text: modelData.hint
+                  wrapMode: Text.WordWrap
+                  color: Color.muted
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
               }
 
               MouseArea {
                 width: Style.space(80)
                 height: Style.space(28)
+                anchors.verticalCenter: parent.verticalCenter
                 onClicked: root.decide(modelData.approvalId, "allow")
                 Rectangle {
                   anchors.fill: parent
@@ -191,6 +245,7 @@ Item {
               MouseArea {
                 width: Style.space(80)
                 height: Style.space(28)
+                anchors.verticalCenter: parent.verticalCenter
                 onClicked: root.decide(modelData.approvalId, "deny")
                 Rectangle {
                   anchors.fill: parent
