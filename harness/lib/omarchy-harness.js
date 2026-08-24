@@ -5,6 +5,7 @@ const { spawnSync } = require('child_process')
 const { createAcpSession, loadProfile } = require('./acp')
 const { createSessionStore, requiresApproval } = require('./session')
 const mutations = require('./mutations')
+const privilege = require('./privilege')
 
 const HARNESS_ROOT = path.resolve(__dirname, '..')
 const INTEGRITY_PATH = path.join(HARNESS_ROOT, 'integrity.json')
@@ -105,6 +106,7 @@ function overlayFiles() {
     'lib/acp.js',
     'lib/mutations.js',
     'lib/omarchy-harness.js',
+    'lib/privilege.js',
     'lib/session.js',
     'profile/omarchy.json',
   ]
@@ -195,6 +197,7 @@ function createHarness(options = {}) {
   const exec = options.exec || ((argv) => defaultExec(argv, env))
   const hyprctl = options.hyprctl || ((args) => defaultHyprctl(args, env))
   const now = options.now || defaultNow
+  const tty = privilege.detectTty(options)
   const integrity = options.integrity || loadIntegrity()
   const home = env.HOME || '/tmp'
   const logPath =
@@ -271,25 +274,27 @@ function createHarness(options = {}) {
     return runL1(name, args)
   }
 
-  function privilegeFor(spec) {
-    if (!spec || spec.privilege === 'none') {
-      return { path: 'none', wrapped: false }
-    }
-    return { path: 'unwrapped', wrapped: false, alreadyElevates: true }
+  function privilegeFor(spec, argv) {
+    return privilege.decide({
+      privilege: spec && spec.privilege,
+      argv,
+      tty,
+    })
   }
 
   function runL2(name, args = {}) {
     const spec = mutations.systemContract(name)
     const argv = mutations.argvForSystem(name, args)
-    const privilege = privilegeFor(spec)
-    const result = exec(argv)
+    const decision = privilegeFor(spec, argv)
+    const launched = privilege.wrapArgv(argv, decision)
+    const result = exec(launched)
     const status = result.status == null ? 1 : result.status
     store.append({
       type: spec.auditEvent,
       op: name,
       args,
-      argv,
-      privilege,
+      argv: launched,
+      privilege: decision,
       status,
     })
     return {
@@ -297,7 +302,7 @@ function createHarness(options = {}) {
       status,
       stdout: result.stdout || '',
       stderr: result.stderr || '',
-      privilege,
+      privilege: decision,
     }
   }
 
@@ -514,6 +519,8 @@ function createHarness(options = {}) {
       system: true,
       l1_surface: 'executable',
       l2_surface: 'executable',
+      privilege: 'skill',
+      privilege_wrap_v0: false,
       l1: mutations.l1Names(),
       l2: mutations.l2Names(),
       clients: profile.clients,
@@ -575,6 +582,7 @@ function createHarness(options = {}) {
     dumpConfig,
     log,
     mutations,
+    privilege,
     prompt,
     session,
     store,
@@ -601,6 +609,8 @@ function printDumpConfig(config) {
     'system',
     'l1_surface',
     'l2_surface',
+    'privilege',
+    'privilege_wrap_v0',
   ]) {
     const value = config[key] == null ? '' : config[key]
     lines.push(`  ${key}: ${value}`)
@@ -766,6 +776,7 @@ module.exports = {
   loadProfile,
   mutations,
   normalizeRoute,
+  privilege,
   overlayFiles,
   printDumpConfig,
   runCli,
