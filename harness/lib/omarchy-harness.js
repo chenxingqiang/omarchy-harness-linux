@@ -5,6 +5,7 @@ const { spawnSync } = require('child_process')
 const { createAcpSession, loadProfile } = require('./acp')
 const { createSessionStore, requiresApproval } = require('./session')
 const mutations = require('./mutations')
+const facts = require('./facts')
 
 const HARNESS_ROOT = path.resolve(__dirname, '..')
 const INTEGRITY_PATH = path.join(HARNESS_ROOT, 'integrity.json')
@@ -103,6 +104,7 @@ function overlayFiles() {
     'host.js',
     'integrity.json',
     'lib/acp.js',
+    'lib/facts.js',
     'lib/mutations.js',
     'lib/omarchy-harness.js',
     'lib/session.js',
@@ -208,6 +210,13 @@ function createHarness(options = {}) {
     newId: options.newId,
     approvalTimeoutMs: options.approvalTimeoutMs,
   })
+  const innerState = store.state.bind(store)
+  store.state = function projectedState() {
+    const snapshot = innerState()
+    return Object.assign({}, snapshot, {
+      recent: facts.recent(store.events()),
+    })
+  }
 
   function notifyApproval(mutation) {
     exec(mutations.approvalCardArgv(mutation))
@@ -575,6 +584,7 @@ function createHarness(options = {}) {
     dumpConfig,
     log,
     mutations,
+    facts,
     prompt,
     session,
     store,
@@ -762,6 +772,7 @@ module.exports = {
   classifyRoute,
   createHarness,
   createSessionLog,
+  facts,
   loadIntegrity,
   loadProfile,
   mutations,

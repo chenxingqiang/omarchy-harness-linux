@@ -161,6 +161,7 @@ function parseHostState(text) {
     return {
       hostDown: true,
       pending: [],
+      log: [],
       title: 'Untitled session',
       statusText: hostDownMessage(),
       keyboardHint: keyboardHint(),
@@ -172,6 +173,7 @@ function parseHostState(text) {
       return {
         hostDown: true,
         pending: [],
+        log: [],
         title: 'Untitled session',
         statusText: hostDownMessage(),
         keyboardHint: keyboardHint(),
@@ -181,6 +183,7 @@ function parseHostState(text) {
     return {
       hostDown: false,
       pending: pending,
+      log: Array.isArray(state.recent) ? state.recent : [],
       title: title(state),
       statusText: statusTextFor(pending),
       keyboardHint: keyboardHint(),
@@ -189,6 +192,7 @@ function parseHostState(text) {
     return {
       hostDown: true,
       pending: [],
+      log: [],
       title: 'Untitled session',
       statusText: hostDownMessage(),
       keyboardHint: keyboardHint(),
