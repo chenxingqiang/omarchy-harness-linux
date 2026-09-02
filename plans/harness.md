@@ -2,7 +2,7 @@
 
 Revision 6 is the **Phase 2 freeze point**. Rev 7 is the **L1 surface review**. Rev 8 opens **Phase 3 L1**. Rev 9 opens **Phase 3 L2**: `dispatch.system` is a frozen seven-operation method table that always runs snapshot → approval → execute → audit. Frozen architecture is not reopened. Mermaid diagrams are unchanged.
 
-**Status:** Rev 6 / Phase 2 Freeze remains the session-control-plane baseline. Rev 8 made the eight L1 operations callable. Rev 9 makes a finite L2 set callable on `dispatch.system`. Overlay pending cards now name the plane (session / desktop / system) from host facts, including whether an L2 snapshot was recorded. `Super + Shift + H` toggles the overlay and does not steal the agent launcher. `dispatch.write` still cannot represent L2. Generic execute, shell, `hyprctl <string>`, `/etc`, and `/usr` stay unrepresentable. The user unit is still not enabled at first-run.
+**Status:** Rev 6 / Phase 2 Freeze remains the session-control-plane baseline. Rev 8 made the eight L1 operations callable. Rev 9 makes a finite L2 set callable on `dispatch.system`. Overlay pending cards name the plane from host facts. The overlay renders a redacted Session Log projection (`recent`) from the host; it is not a second fact store. `dispatch.write` still cannot represent L2. Generic execute, shell, `hyprctl <string>`, `/etc`, and `/usr` stay unrepresentable. The user unit is still not enabled at first-run.
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -1093,7 +1093,7 @@ Held / unrepresentable on both surfaces: generic execute, shell, `hyprctl <strin
 
 Pending L1/L2/session-reset approvals emit an `omarchy-action` toast that punches DND. The click command is a fixed `omarchy-shell shell summon omarchy.harness`. It does not auto-allow. Allow/deny still post to the host. Overlay remains an ACP client and is not a second approval store.
 
-The overlay daily-driver cards classify each pending mutation from the Session Log: session reset, L1 desktop, or L2 system. Snapshot-first is a recorded fact (`mutation.snapshot.status === 0`), not a catalog lookup in Quickshell. `Y` / `N` decide the first card through `omarchy-harness-approve` / `omarchy-harness-deny`. The keybind is `Super + Shift + H` (`omarchy-shell shell toggle omarchy.harness`). First-run enable of the user unit stays Phase 4.
+The overlay daily-driver cards classify each pending mutation from the Session Log: session reset, L1 desktop, or L2 system. Snapshot-first is a recorded fact (`mutation.snapshot.status === 0`), not a catalog lookup in Quickshell. `Y` / `N` decide the first card through `omarchy-harness-approve` / `omarchy-harness-deny`. The keybind is `Super + Shift + H` (`omarchy-shell shell toggle omarchy.harness`). The overlay also renders a redacted `recent` projection of the Session Log (user messages, decisions, typed audits). It does not keep a private log. First-run enable of the user unit stays Phase 4.
 
 ### Phase 4 — harden and default-off → default-on
 
@@ -1133,6 +1133,7 @@ Automated tests stay in this repo's existing runners. Graphical checks follow th
 | pkg.add snapshots then asks | overlay unit | 3 | deny and idempotent allow do not install |
 | pending approval sends omarchy-action card | overlay unit | 3 | click summons overlay; does not auto-allow |
 | overlay pending cards name the plane | shell test | 3 | session/desktop/system badge; snapshot hint only from recorded fact; Y/N post to host |
+| overlay session log is a host projection | shell test | 3 | `recent` omits argv/status payloads; overlay only renders host facts |
 
 Do not run graphical acceptance in `./test/all`. Host tests must not require a live compositor; provider fakes are the seam's purpose.
 

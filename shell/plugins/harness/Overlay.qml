@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "SessionView.js" as SessionView
@@ -16,6 +17,7 @@ Item {
   property bool hostDown: false
   property string statusText: ""
   property var pending: []
+  property var log: []
   property string sessionTitle: "Untitled session"
   property string keyboardHint: ""
 
@@ -57,6 +59,7 @@ Item {
     const view = SessionView.parseHostState(text)
     root.hostDown = view.hostDown
     root.pending = view.pending
+    root.log = view.log || []
     root.sessionTitle = view.title
     root.statusText = view.statusText
     root.keyboardHint = view.keyboardHint || ""
@@ -139,6 +142,7 @@ Item {
         id: keyCatcher
         anchors.fill: parent
         focus: true
+        Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
             root.dismiss()
@@ -155,12 +159,12 @@ Item {
           }
         }
 
-        Column {
+        ColumnLayout {
           anchors.fill: parent
           spacing: Style.spacing.md
 
           Text {
-            width: parent.width
+            Layout.fillWidth: true
             text: root.sessionTitle
             color: root.foreground
             font.family: root.fontFamily
@@ -168,7 +172,7 @@ Item {
           }
 
           Text {
-            width: parent.width
+            Layout.fillWidth: true
             text: root.statusText
             wrapMode: Text.WordWrap
             color: root.foreground
@@ -178,7 +182,7 @@ Item {
           }
 
           Text {
-            width: parent.width
+            Layout.fillWidth: true
             visible: !root.hostDown
             text: root.keyboardHint
             color: Color.muted
@@ -186,76 +190,125 @@ Item {
             font.pixelSize: Style.font.bodySmall
           }
 
-          Repeater {
-            model: root.pending
-            delegate: Row {
-              required property var modelData
-              spacing: Style.spacing.sm
-              width: keyCatcher.width
+          Flickable {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            contentWidth: width
+            contentHeight: stream.height
+            boundsBehavior: Flickable.StopAtBounds
 
-              Column {
-                width: parent.width - Style.space(180)
-                spacing: Style.spacing.xxs
+            Column {
+              id: stream
+              width: parent.width
+              spacing: Style.spacing.md
 
-                Text {
-                  text: modelData.badge
-                  color: root.pendingToneColor(modelData.tone)
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: modelData.kind === "system"
-                }
+              Repeater {
+                model: root.pending
+                delegate: Row {
+                  required property var modelData
+                  spacing: Style.spacing.sm
+                  width: stream.width
 
-                Text {
-                  width: parent.width
-                  text: modelData.summary || modelData.approvalId
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                  wrapMode: Text.WordWrap
-                }
+                  Column {
+                    width: parent.width - Style.space(180)
+                    spacing: Style.spacing.xxs
 
-                Text {
-                  width: parent.width
-                  text: modelData.hint
-                  wrapMode: Text.WordWrap
-                  color: Color.muted
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                }
-              }
+                    Text {
+                      text: modelData.badge
+                      color: root.pendingToneColor(modelData.tone)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: modelData.kind === "system"
+                    }
 
-              MouseArea {
-                width: Style.space(80)
-                height: Style.space(28)
-                anchors.verticalCenter: parent.verticalCenter
-                onClicked: root.decide(modelData.approvalId, "allow")
-                Rectangle {
-                  anchors.fill: parent
-                  radius: root.cornerRadius
-                  color: root.selectedBackground
-                  Text {
-                    anchors.centerIn: parent
-                    text: "Allow"
-                    color: root.selectedText
-                    font.family: root.fontFamily
+                    Text {
+                      width: parent.width
+                      text: modelData.summary || modelData.approvalId
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.body
+                      wrapMode: Text.WordWrap
+                    }
+
+                    Text {
+                      width: parent.width
+                      text: modelData.hint
+                      wrapMode: Text.WordWrap
+                      color: Color.muted
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                    }
+                  }
+
+                  MouseArea {
+                    width: Style.space(80)
+                    height: Style.space(28)
+                    anchors.verticalCenter: parent.verticalCenter
+                    onClicked: root.decide(modelData.approvalId, "allow")
+                    Rectangle {
+                      anchors.fill: parent
+                      radius: root.cornerRadius
+                      color: root.selectedBackground
+                      Text {
+                        anchors.centerIn: parent
+                        text: "Allow"
+                        color: root.selectedText
+                        font.family: root.fontFamily
+                      }
+                    }
+                  }
+
+                  MouseArea {
+                    width: Style.space(80)
+                    height: Style.space(28)
+                    anchors.verticalCenter: parent.verticalCenter
+                    onClicked: root.decide(modelData.approvalId, "deny")
+                    Rectangle {
+                      anchors.fill: parent
+                      radius: root.cornerRadius
+                      color: root.border
+                      Text {
+                        anchors.centerIn: parent
+                        text: "Deny"
+                        color: root.foreground
+                        font.family: root.fontFamily
+                      }
+                    }
                   }
                 }
               }
 
-              MouseArea {
-                width: Style.space(80)
-                height: Style.space(28)
-                anchors.verticalCenter: parent.verticalCenter
-                onClicked: root.decide(modelData.approvalId, "deny")
-                Rectangle {
-                  anchors.fill: parent
-                  radius: root.cornerRadius
-                  color: root.border
+              Text {
+                width: parent.width
+                visible: root.log.length > 0
+                text: "Session log"
+                color: Color.muted
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              Repeater {
+                model: root.log
+                delegate: Column {
+                  required property var modelData
+                  width: stream.width
+                  spacing: Style.spacing.xxs
+
                   Text {
-                    anchors.centerIn: parent
-                    text: "Deny"
+                    text: modelData.badge
+                    color: root.pendingToneColor(modelData.kind === "system" ? "urgent" : (modelData.kind === "desktop" ? "accent" : "muted"))
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
+
+                  Text {
+                    width: parent.width
+                    text: modelData.summary
+                    wrapMode: Text.WordWrap
                     color: root.foreground
                     font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
                   }
                 }
               }
