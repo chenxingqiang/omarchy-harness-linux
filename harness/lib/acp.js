@@ -92,6 +92,7 @@ function createAcpSession(harness) {
       write: true,
       system: true,
       sessionWrite: true,
+      privilege: 'skill',
       l1: mutations.l1Names(),
       l2: mutations.l2Names(),
     })

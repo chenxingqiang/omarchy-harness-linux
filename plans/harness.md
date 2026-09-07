@@ -2,7 +2,7 @@
 
 Revision 6 is the **Phase 2 freeze point**. Rev 7 is the **L1 surface review**. Rev 8 opens **Phase 3 L1**. Rev 9 opens **Phase 3 L2**: `dispatch.system` is a frozen seven-operation method table that always runs snapshot → approval → execute → audit. Frozen architecture is not reopened. Mermaid diagrams are unchanged.
 
-**Status:** Rev 6 / Phase 2 Freeze remains the session-control-plane baseline. Rev 8 made the eight L1 operations callable. Rev 9 makes a finite L2 set callable on `dispatch.system`. Overlay pending cards now name the plane (session / desktop / system) from host facts, including whether an L2 snapshot was recorded. `Super + Shift + H` toggles the overlay and does not steal the agent launcher. `dispatch.write` still cannot represent L2. Generic execute, shell, `hyprctl <string>`, `/etc`, and `/usr` stay unrepresentable. The user unit is still not enabled at first-run.
+**Status:** Rev 6 / Phase 2 Freeze remains the session-control-plane baseline. Rev 8 made the eight L1 operations callable. Rev 9 makes a finite L2 set callable on `dispatch.system`. Overlay pending cards name the plane from host facts. The Phase 3 privilege seam is now executable policy (`ctx.omarchy.privilege`): visible TTY → `sudo`, no TTY → `pkexec`, already-elevating effectors stay unwrapped, `/usr/share/omarchy/` is deny. v0 L2 argv is still bare `omarchy …`. Privilege is not a model-callable wrap-any-argv tool. The user unit is still not enabled at first-run.
 
 **Thesis:** the user still operates Omarchy. Harness does not take over the desktop. It is the session Control Plane. AI action reaches Linux only as typed tools → policy → dispatcher → Omarchy effectors (the Data Plane). Facts that the agent caused or that the model saw go into one Session Log, so a turn can Resume / Fork / Replay.
 
@@ -901,12 +901,14 @@ Keep the shipped skill at `default/agents/skills/omarchy`. Do not rewrite it int
 
 A Harness `ctx.skills` filesystem provider points at `$OMARCHY_PATH/default/agents/skills/` plus `~/.config/omarchy/skills/`. The existing finalize step that symlinks into `~/.{agents,claude,codex,pi/agent}/skills/` remains, so other CLIs keep working. Phase 1 does not require the skill mount to be live for observe tools.
 
-The skill's privilege paragraph becomes executable policy in `ctx.omarchy.privilege` in Phase 3:
+The skill's privilege paragraph is executable policy in `harness/lib/privilege.js` (`ctx.omarchy.privilege`):
 
 - visible terminal → `sudo`
 - no TTY (overlay, notification action, user unit) → `pkexec`
-- never wrap a command that already elevates
+- never wrap a command that already elevates (`privilege: effector` or argv already `sudo`/`pkexec`)
 - never edit `/usr/share/omarchy/`
+- v0 L2 ops are `none` or `effector`, so `dispatch.system` still execs bare `omarchy …`
+- the seam is not a model-callable tool; ACP/dump-config advertise `privilege: skill`
 
 ### 6. Approval, sandbox, and privilege
 
@@ -1133,6 +1135,7 @@ Automated tests stay in this repo's existing runners. Graphical checks follow th
 | pkg.add snapshots then asks | overlay unit | 3 | deny and idempotent allow do not install |
 | pending approval sends omarchy-action card | overlay unit | 3 | click summons overlay; does not auto-allow |
 | overlay pending cards name the plane | shell test | 3 | session/desktop/system badge; snapshot hint only from recorded fact; Y/N post to host |
+| privilege seam follows the skill rule | overlay unit | 3 | TTY→sudo, no TTY→pkexec, effector unwrapped, `/usr/share/omarchy/` deny; no model wrap tool |
 
 Do not run graphical acceptance in `./test/all`. Host tests must not require a live compositor; provider fakes are the seam's purpose.
 
