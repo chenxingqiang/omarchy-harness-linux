@@ -84,6 +84,7 @@ version                        ──►  omarchy             /usr/share/omarchy
 config/**                      ──►  omarchy-settings    /etc/skel/.config/**         (seeds new users)
                                                         /usr/share/omarchy/config/** (resync source)
 etc/fastfetch/config.jsonc     ──►  omarchy-settings    /etc/fastfetch/config.jsonc
+etc/xdg/kitty/kitty.conf       ──►  omarchy-settings    /etc/xdg/kitty/kitty.conf
 
 applications/*.desktop         ──►  omarchy-settings    /etc/skel/.local/share/applications/
                                                         /usr/share/omarchy/applications/
@@ -360,3 +361,9 @@ return to the packaged default.
 | New stock theme | `themes/<name>/` (+ matching templates under `default/themed/` if they need theme colors) |
 | User-installed theme | `~/.config/omarchy/themes/<name>/` |
 | Generated current theme/background state | `~/.local/state/omarchy/current/` |
+
+## Kitty defaults and user overrides
+
+Kitty loads `/etc/xdg/kitty/kitty.conf` before `~/.config/kitty/kitty.conf`. The `omarchy-settings` package owns the system file; the user template contains only the active theme include and commented examples for personal overrides. Keeping the theme include in the user file lets users remove it without changing the packaged defaults. Individual inherited keybindings can be unmapped with an empty `map <shortcut>` directive, or all inherited bindings can be cleared with `clear_all_shortcuts yes`.
+
+The system default uses `allow_remote_control socket-only` so Omarchy can query the active terminal directory over its Unix socket while Kitty rejects remote-control requests arriving through terminal output. Changing this setting requires restarting Kitty. The migration refreshes the exact previous stock config with a backup; customized configs retain their settings and ordering, with only explicit unrestricted `yes`, `y`, or `true` remote-control settings commented out.
