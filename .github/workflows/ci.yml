@@ -41,8 +41,12 @@ jobs:
         run: |
           # The suites exercise the real non-privileged user path: the sudo
           # stubs they install on PATH must be reached, which root skips.
+          # The checkout stays root-owned and world-readable (the default from
+          # actions/checkout) rather than chowned to tester: omarchy-plymouth-set's
+          # trust chain requires OMARCHY_PATH and every parent directory to be
+          # root-owned, matching a real packaged install, and no test writes
+          # into the checkout itself.
           useradd --create-home tester
-          chown -R tester:tester "$GITHUB_WORKSPACE"
           runuser -u tester -- git config --global --add safe.directory "$GITHUB_WORKSPACE"
           runuser -u tester -- env \
             OMARCHY_PKGS_PATH="$GITHUB_WORKSPACE/omarchy-pkgs" \
