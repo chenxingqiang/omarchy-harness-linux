@@ -1,0 +1,36 @@
+# agentENV container settings: route the harness LLM seam through the local
+# Claude gateway (the same witmem-gw nginx the macOS Claude config points
+# ANTHROPIC_BASE_URL at). Inside the VM/container the gateway is addressed as
+# https://witmem-gw.local:8443 (mapped to the QEMU user-net host alias
+# 10.0.2.2 by the docker run --add-host flag), which the gateway's self-signed
+# certificate covers (CN=witmem-gw.local, trusted via NODE_EXTRA_CA_CERTS).
+agent-default-model:
+  provider: claude-local
+  model: deepseek-v4-flash
+
+llm-pi-ai:
+  providers:
+    claude-local:
+      displayName: Claude Local Gateway
+      apiKeyEnv: ANTHROPIC_AUTH_TOKEN
+      api: openai-completions
+      baseURL: https://witmem-gw.local:8443
+      compat:
+        thinkingFormat: deepseek
+      models:
+        - id: deepseek-v4-flash
+          name: DeepSeek V4 Flash
+        - id: deepseek-v4-pro
+          name: DeepSeek V4 Pro
+        - id: glm-5.3
+          name: GLM 5.3
+        - id: glm-5.3-flash
+          name: GLM 5.3 Flash
+        - id: doubao-seed-2.0-code
+          name: Doubao Seed 2.0 Code
+        - id: doubao-seed-2.0-lite
+          name: Doubao Seed 2.0 Lite
+        - id: kimi-k2.7-code
+          name: Kimi K2.7 Code
+        - id: minimax-m3
+          name: MiniMax M3

@@ -1,0 +1,39 @@
+# The agentENV service image: the omarchy harness (dsh) as a Docker service
+# exposing the dsh web HTTP API for agent clients. Built from the harness
+# packaging pin (package.json + package-lock.json, see plans/harness.md); the
+# dsh-omarchy bundle is NOT mounted here because its L1/L2 effectors drive
+# the host desktop (Hyprland/pacman/snapper), which a container has none of.
+# The omarchy control plane stays on the host; this container is the agent
+# data-plane environment.
+#
+# node:22-slim is multi-arch (aarch64 on the try-omarchy VM) and satisfies
+# the harness engines range (^22.19.0 || >=24.0.0).
+FROM node:22-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates bash git tini \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g pnpm@10 --loglevel=error
+
+WORKDIR /opt/harness
+
+# Packaging-time node_modules, exactly as plans/harness.md prescribes:
+# npm ci at build time, never committed.
+COPY package.json package-lock.json ./
+COPY docker/settings.yaml docker/.credentials.yaml docker/witmem-gw.crt /root/.dsh/
+RUN npm ci --no-audit --no-fund --loglevel=error \
+  && chmod 600 /root/.dsh/.credentials.yaml
+COPY docker/entrypoint.sh /opt/harness/docker/entrypoint.sh
+
+# The model gateway's self-signed CA (witmem-gw). The gateway is reached as
+# https://witmem-gw.local:8443; the run command maps that name to the QEMU
+# user-net host alias 10.0.2.2 via --add-host so the certificate's DNS SAN
+# matches.
+ENV DSH_HOME=/root/.dsh \
+    NODE_EXTRA_CA_CERTS=/root/.dsh/witmem-gw.crt
+
+EXPOSE 8377
+
+# tini as PID 1 so dsh receives signals and reaps correctly.
+ENTRYPOINT ["/usr/bin/tini", "--", "/opt/harness/docker/entrypoint.sh"]
+CMD ["--host", "127.0.0.1", "--port", "8377", "--no-open"]

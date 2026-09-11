@@ -36,6 +36,38 @@ flowchart LR
 
 Read more at [omarchy.org](https://omarchy.org).
 
+## Running the Harness (dsh) from a Mac
+
+The DeepSeek Harness runs as the default agent inside the try-omarchy VM
+(QEMU, SSH on port 2222). The agent daemon is a resident Docker container
+(`agentenv`, auto-started on VM boot) that reaches the local LLM gateway
+(`witmem-gw.local:8443`, trusted via `NODE_EXTRA_CA_CERTS`).
+
+```sh
+# 1. Browser (Web UI is the official dsh interactive UX):
+ssh -p 2222 -f -N -L 8377:127.0.0.1:8377 johnson@127.0.0.1   # SSH tunnel
+open http://127.0.0.1:8377
+
+# 2. Terminal inside the VM (desktop terminal window):
+a                                    # opens the resident Web UI
+omarchy agent prompt "check disk"    # one-shot answer via dsh
+怎么查看内存占用                      # natural language -> dsh answers
+
+# 3. Headless one-shot straight from the Mac:
+ssh -p 2222 johnson@127.0.0.1 'omarchy-agent --inline --prompt "hi"'
+
+# 4. Scale pilot (10/50/10000 tasks, bounded concurrency):
+ssh -p 2222 johnson@127.0.0.1 'harness/docker/pilot-run.sh 50'
+
+# 5. Container management:
+ssh -p 2222 johnson@127.0.0.1 'sudo docker logs -f agentenv'
+ssh -p 2222 johnson@127.0.0.1 'sudo docker restart agentenv'
+```
+
+Container material lives in [`harness/docker/`](harness/docker/)
+(Containerfile, entrypoint, model settings); the VM-side dsh wrapper is
+`~/.local/bin/dsh` (also linked at `/usr/local/bin/dsh`).
+
 ## The Omarchy Manual
 
 The manual lives in [`manual/`](manual/), which is its authoritative source. It's
