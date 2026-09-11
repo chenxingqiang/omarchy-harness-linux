@@ -1,0 +1,33 @@
+README.md
+  s_c7a500c8fadd0f::t_7a985b0064c55a 100,103-117
+  s_c7a500c8fadd0f::t_0e8edabf81bf31 41-99,101-102,118-135,138,142,147,150,153,159-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "266850a388db9857a0fba15ce1a53d7104699993",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "glm-5.3__dev"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "runtime_client": "trae-tob-git-ai",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa3da723e927e87388db42f:afterEdit:08cdd783",
+        "operation_id": "6aa3da723e927e87388db42f",
+        "tool_use_id": "6aa3da723e927e87388db42f",
+        "source_scene": "unknown",
+        "session_id": "6aa12de77da38ebfcb6324c5",
+        "tool_id": "Edit",
+        "edit_kind": "file_edit",
+        "tool_type": "agent",
+        "client_type": "ide"
+      }
+    }
+  }
+}
