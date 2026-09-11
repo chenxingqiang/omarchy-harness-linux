@@ -1,0 +1,38 @@
+.github/workflows/ci.yml
+  s_c7a500c8fadd0f::t_d58259ae5aa40c 35-52
+test/shell.d/update-lock-test.sh
+  s_c7a500c8fadd0f::t_102c6cecae4cd9 116-121
+test/shell.d/hermes-remove-test.sh
+  s_c7a500c8fadd0f::t_aa60153192d160 277-280
+  s_c7a500c8fadd0f::t_d724d6cbdec3ef 103
+  s_c7a500c8fadd0f::t_f010a1b38e305d 88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "143a378a1b37ae1eb75ee59cf0a8d0f6a14fee9a",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "glm-5.3__dev"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "runtime_client": "trae-tob-git-ai",
+        "tool_type": "agent",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa3a9903e927e87388dad4e:afterEdit:b104bd85",
+        "session_id": "6aa12de77da38ebfcb6324c5",
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "edit_kind": "file_edit",
+        "source_scene": "unknown",
+        "tool_id": "Edit",
+        "tool_use_id": "6aa3a9903e927e87388dad4e",
+        "client_type": "ide",
+        "operation_id": "6aa3a9903e927e87388dad4e"
+      }
+    }
+  }
+}

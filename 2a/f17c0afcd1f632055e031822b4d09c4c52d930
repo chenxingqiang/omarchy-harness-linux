@@ -1,0 +1,55 @@
+plans/harness.md
+  s_c7a500c8fadd0f::t_082279f2ea590b 1150
+harness/bundle/dsh-omarchy/package.json
+  s_c7a500c8fadd0f::t_217f3a83e1ffa7 1-17
+.gitignore
+  s_c7a500c8fadd0f::t_3f50fa4e83058e 5-9
+harness/bundle/dsh-omarchy/cordis.patch.yml
+  s_c7a500c8fadd0f::t_4a2491cf69c2be 1-14
+test/shell.d/harness-dsh-omarchy-bundle-test.sh
+  s_c7a500c8fadd0f::t_091fd5d923fdd5 27
+  s_c7a500c8fadd0f::t_a8b3a0ed13b4bf 1-26,28-31,43-116
+  s_c7a500c8fadd0f::t_9b5875e75a3f1a 32-42
+harness/integrity.json
+  s_c7a500c8fadd0f::t_0be4f300598aa7 7-10,18-20
+harness/package.json
+  s_c7a500c8fadd0f::t_daf3024e197fee 1-3,5-15
+  s_c7a500c8fadd0f::t_e5cd6fd77cbd62 4
+bin/omarchy-harness-dsh-link
+  s_c7a500c8fadd0f::t_b6e5ac0762763f 38-41
+  s_c7a500c8fadd0f::t_de89f4b5430ab4 1-37,42-96,101-106
+  s_c7a500c8fadd0f::t_af8dd3265df780 97-100
+harness/bundle/dsh-omarchy/plugin.js
+  s_c7a500c8fadd0f::t_dde9992bbe32dd 161
+  s_c7a500c8fadd0f::t_969eae08eb52e6 1-23,37-160
+  s_c7a500c8fadd0f::t_928d55f693d80d 24-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "2af17c0afcd1f632055e031822b4d09c4c52d930",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "source_scene": "unknown",
+        "operation_id": "6aa3b5f33e927e87388daf07",
+        "edit_kind": "file_edit",
+        "runtime_client": "trae-tob-git-ai",
+        "session_id": "6aa12de77da38ebfcb6324c5",
+        "tool_id": "SearchReplace",
+        "client_type": "ide",
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "tool_type": "agent",
+        "tool_use_id": "6aa3b5f33e927e87388daf07",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa3b5f33e927e87388daf07:afterEdit:a6664e58"
+      }
+    }
+  }
+}
