@@ -1,0 +1,32 @@
+.github/workflows/ci.yml
+  s_c7a500c8fadd0f::t_ab65878d329916 44-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "6550b1309b1bd23d38657328cce9a48d1c36777c",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "tool_type": "agent",
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "tool_id": "SearchReplace",
+        "edit_kind": "file_edit",
+        "tool_use_id": "6aa3a3363e927e87388dac9a",
+        "operation_id": "6aa3a3363e927e87388dac9a",
+        "client_type": "ide",
+        "source_scene": "unknown",
+        "runtime_client": "trae-tob-git-ai",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa3a3363e927e87388dac9a:afterEdit:26bc5073",
+        "session_id": "6aa12de77da38ebfcb6324c5"
+      }
+    }
+  }
+}
