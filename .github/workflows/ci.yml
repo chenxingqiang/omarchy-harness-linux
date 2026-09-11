@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [quattro, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Headless test suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: archlinux:base
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check out omarchy-pkgs for packaging coverage tests
+        uses: actions/checkout@v4
+        with:
+          repository: omacom/omarchy-pkgs
+          path: omarchy-pkgs
+
+      - name: Check out omarchy-iso for installer coverage tests
+        uses: actions/checkout@v4
+        with:
+          repository: omacom/omarchy-iso
+          path: omarchy-iso
+
+      - name: Install test dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Syu --noconfirm git jq nodejs python ripgrep tmux curl imagemagick lua ffmpeg plocate libxkbcommon hyprland grim diffutils gum mise desktop-file-utils sudo openssh
+
+      - name: Run the test suites
+        run: |
+          # The suites exercise the real non-privileged user path: the sudo
+          # stubs they install on PATH must be reached, which root skips.
+          useradd --create-home tester
+          chown -R tester:tester "$GITHUB_WORKSPACE"
+          runuser -u tester -- git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          runuser -u tester -- env \
+            OMARCHY_PKGS_PATH="$GITHUB_WORKSPACE/omarchy-pkgs" \
+            OMARCHY_ISO_PATH="$GITHUB_WORKSPACE/omarchy-iso" \
+            ./test/all
