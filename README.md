@@ -38,34 +38,126 @@ Read more at [omarchy.org](https://omarchy.org).
 
 ## Running the Harness (dsh) from a Mac
 
-The DeepSeek Harness runs as the default agent inside the try-omarchy VM
-(QEMU, SSH on port 2222). The agent daemon is a resident Docker container
-(`agentenv`, auto-started on VM boot) that reaches the local LLM gateway
-(`witmem-gw.local:8443`, trusted via `NODE_EXTRA_CA_CERTS`).
+The full stack from a bare Apple Silicon Mac: [Try Omarchy](https://github.com/chenxingqiang/try-omarchy)
+runs the Omarchy desktop as a native QEMU app, the harness boots inside it,
+and dsh runs as the default agent in a resident Docker container that reaches
+the Mac's LLM gateway (`witmem-gw.local:8443`, self-signed CA trusted via
+`NODE_EXTRA_CA_CERTS`).
+
+### 1. Build and launch the try-Omarchy VM
 
 ```sh
-# 1. Browser (Web UI is the official dsh interactive UX):
+git clone https://github.com/chenxingqiang/try-omarchy && cd try-omarchy
+make build          # doctor -> guest image -> QEMU runtime -> Swift app
+open dist/*.app      # launches the VM window (first boot creates user johnson)
+```
+
+Loopback port forwarding is built in: `ssh -p 2222 johnson@127.0.0.1`
+reach the VM. Install your Mac public key on first login (password login
+is enabled on first boot):
+
+```sh
+ssh-copy-id -p 2222 johnson@127.0.0.1
+```
+
+### 2. Provision the VM
+
+```sh
+ssh -p 2222 johnson@127.0.0.1
+sudo pacman -Syu --noconfirm docker git
+sudo systemctl enable --now docker
+sudo usermod -aG docker johnson && exit   # re-login to pick up the group
+
+# Fetch this repo (the harness) into the VM:
+ssh -p 2222 johnson@127.0.0.1 'git clone -b quattro \
+  https://github.com/chenxingqiang/omarchy-harness-linux ~/omarchy-harness-linux'
+```
+
+If the VM needs an HTTP proxy for outbound traffic, set it in
+`/etc/environment` (`http_proxy=...`) — the QEMU user network reaches the
+Mac's proxy via `10.0.2.2`.
+
+### 3. Build and start the agentENV container
+
+```sh
+ssh -p 2222 johnson@127.0.0.1
+cd ~/omarchy-harness-linux/harness
+sudo docker build -f docker/Containerfile -t omarchy-agentenv .   # needs docker/.credentials.yaml (not in git)
+sudo docker run -d --name agentenv --restart unless-stopped \
+  --network host omarchy-agentenv
+curl -s http://127.0.0.1:8377 >/dev/null && echo "agentENV up"
+```
+
+The container materializes the `agentenv` dsh profile (dsh-base +
+dsh-web-app) on boot and serves the Web UI on `127.0.0.1:8377`; the gateway
+name `witmem-gw.local` resolves to `10.0.2.2` (the QEMU host alias), so the
+self-signed certificate's DNS SAN matches.
+
+### 4. Make dsh the default agent (first-class wiring)
+
+```sh
+ssh -p 2222 johnson@127.0.0.1
+# Dispatcher scripts (omarchy-agent knows the dsh case; default-agent accepts it):
+sudo cp ~/omarchy-harness-linux/bin/omarchy-agent /usr/bin/
+sudo cp ~/omarchy-harness-linux/bin/omarchy-default-agent /usr/bin/
+
+# The dsh wrapper: headless one-shot forwards into the container, anything
+# else points at the resident Web UI (there is no shipped TUI profile):
+mkdir -p ~/.local/bin && cat > ~/.local/bin/dsh <<'EOF'
+#!/bin/bash
+if [[ ${1:-} == "--profile" && ${2:-} == "headless" && -n ${3:-} && ${3:-} != -* ]]; then
+  exec docker exec -i agentenv /opt/harness/node_modules/.bin/dsh --profile headless "$3"
+fi
+url=http://127.0.0.1:8377
+echo "dsh interactive UX is the Web UI: $url (resident agentenv instance)"
+command -v xdg-open >/dev/null 2>&1 && xdg-open "$url" >/dev/null 2>&1
+EOF
+chmod +x ~/.local/bin/dsh
+sudo ln -sf ~/.local/bin/dsh /usr/local/bin/dsh
+
+omarchy default agent dsh
+```
+
+Then add the natural-language fallback to `~/.bashrc` (multi-word or
+single non-ASCII word -> ask the agent):
+
+```bash
+command_not_found_handle() {
+  if [ $# -gt 1 ] || { [ $# -eq 1 ] && printf %s "$1" | LC_ALL=C grep -q "[^ -~]"; }; then
+    echo "-> not a command, asking the default agent (dsh)..." >&2
+    omarchy agent prompt "$*"
+  else
+    return 127
+  fi
+}
+```
+
+### 5. Use it
+
+```sh
+# Browser (the official dsh interactive UX) — from the Mac:
 ssh -p 2222 -f -N -L 8377:127.0.0.1:8377 johnson@127.0.0.1   # SSH tunnel
 open http://127.0.0.1:8377
 
-# 2. Terminal inside the VM (desktop terminal window):
+# Terminal inside the VM (desktop terminal window):
 a                                    # opens the resident Web UI
 omarchy agent prompt "check disk"    # one-shot answer via dsh
 怎么查看内存占用                      # natural language -> dsh answers
 
-# 3. Headless one-shot straight from the Mac:
+# Headless one-shot straight from the Mac:
 ssh -p 2222 johnson@127.0.0.1 'omarchy-agent --inline --prompt "hi"'
 
-# 4. Scale pilot (10/50/10000 tasks, bounded concurrency):
+# Scale pilot (10/50/10000 tasks, bounded concurrency):
 ssh -p 2222 johnson@127.0.0.1 'harness/docker/pilot-run.sh 50'
 
-# 5. Container management:
+# Container management:
 ssh -p 2222 johnson@127.0.0.1 'sudo docker logs -f agentenv'
 ssh -p 2222 johnson@127.0.0.1 'sudo docker restart agentenv'
 ```
 
 Container material lives in [`harness/docker/`](harness/docker/)
-(Containerfile, entrypoint, model settings); the VM-side dsh wrapper is
+(Containerfile, entrypoint, model settings; `.credentials.yaml` is built
+locally and never committed). The VM-side dsh wrapper is
 `~/.local/bin/dsh` (also linked at `/usr/local/bin/dsh`).
 
 ## The Omarchy Manual
