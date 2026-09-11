@@ -42,8 +42,9 @@ muse | muse-code | musecode)
   agent_package="http:muse[url=https://api.meta.ai/muse-launcher.sh,bin=muse,version_list_url=https://api.meta.ai/muse-code/channels/muse-stable,version_json_path=.version]"
   ;;
 cursor | cursor-agent) agent="cursor-agent"; name="Cursor CLI" ;;
+dsh | deepseek-harness) agent="dsh"; name="DeepSeek Harness" ;;
 *)
-  echo "Usage: omarchy-default-agent <pi|omp|opencode|ori|claude|codex|grok|openclaw|agy|hermes|copilot|crush|cursor-agent|muse>"
+  echo "Usage: omarchy-default-agent <pi|omp|opencode|ori|claude|codex|grok|openclaw|agy|hermes|copilot|crush|cursor-agent|muse|dsh>"
   exit 1
   ;;
 esac

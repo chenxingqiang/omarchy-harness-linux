@@ -59,57 +59,54 @@ function readOutput() {
   }
 }
 
-// L1 (desktop, no system privilege) tool parameters, hand-declared from the
-// runtime-required fields harness/lib/mutations.js already enforces
-// (rejectSmuggled / allowedArgs). Kept explicit rather than derived, so a
-// model-facing schema drifting from the enforced contract fails review
-// instead of drifting silently.
-const L1_PARAMETERS = {
-  'theme.set': {
-    theme: { type: 'string', required: true, description: 'Theme directory name under ~/.config/omarchy/themes' },
-  },
-  'notify.send': {
-    headline: { type: 'string', required: true, description: 'Notification headline' },
-    description: { type: 'string', description: 'Notification body' },
-    glyph: { type: 'string', description: 'Icon name or path passed to -g' },
-    urgency: { type: 'string', enum: ['low', 'normal', 'critical'], description: 'Notification urgency' },
-  },
-  'toggle.nightlight': {},
-  'toggle.bar': {
-    state: { type: 'string', enum: ['on', 'off', 'toggle'], description: 'Desired bar state' },
-  },
-  'toggle.idle': {
-    state: { type: 'string', enum: ['stay-awake', 'allow-idle'], description: 'Desired idle-inhibition state' },
-  },
-  'window.focus': {
-    app: { type: 'string', required: true, description: 'Client class or title to focus' },
-  },
-  'launch.terminal': {},
-  'launch.browser': {},
+// Tool parameters are generated from the mutations contract's argSpec
+// (harness/lib/mutations.js): names, types, requiredness, and enums are
+// declared once beside the CLI contract they mirror, so a new mutation
+// gains its agent-facing schema by declaring argSpec there — never by
+// re-declaring it here.
+//
+// Diagnostics: every generated schema logs one debug line (tool name plus
+// its arg names), and an argSpec entry that cannot produce a valid schema
+// logs a warn naming the tool, the arg, and the reason, then drops that
+// one arg — the dispatch layer's allowedArgs/rejectSmuggled enforcement
+// still rejects model calls that try to use it.
+const VALID_TYPES = Object.freeze(['string', 'number', 'boolean', 'array'])
+
+function parametersFromContract(spec, toolName, logger) {
+  const entries = Object.entries((spec && spec.argSpec) || {})
+  const params = {}
+  for (const [arg, meta] of entries) {
+    const problems = []
+    if (!meta || !VALID_TYPES.includes(meta.type)) {
+      problems.push(`missing/invalid "type" (expected one of ${VALID_TYPES.join('|')})`)
+    }
+    if (meta && meta.enum && (!Array.isArray(meta.enum) || meta.enum.length === 0)) {
+      problems.push('"enum" must be a non-empty array')
+    }
+    if (meta && meta.items && meta.items !== 'string') {
+      problems.push(`unsupported "items" type "${meta.items}"`)
+    }
+    if (problems.length > 0) {
+      logger.warn(`dsh-omarchy: tool "${toolName}" argSpec for "${arg}" is invalid (${problems.join('; ')}); the arg is dropped from the model-facing schema`)
+      continue
+    }
+    const p = { type: meta.type, description: meta.description }
+    if (meta.enum) p.enum = meta.enum
+    if (meta.items) p.items = { type: meta.items }
+    if (meta.required) p.required = true
+    params[arg] = p
+  }
+  logger.debug(`dsh-omarchy: tool "${toolName}" schema generated (${entries.length} arg(s): ${entries.map(([a]) => a).join(', ') || 'none'})`)
+  return params
 }
 
-// L2 (system, approval-gated) tool parameters.
-const L2_PARAMETERS = {
-  'pkg.add': {
-    packages: { type: 'array', items: { type: 'string' }, required: true, description: 'Package names to install' },
-  },
-  'pkg.drop': {
-    packages: { type: 'array', items: { type: 'string' }, required: true, description: 'Package names to remove' },
-  },
-  update: {},
-  'snapshot.create': {},
-  'snapshot.restore': {},
-  'system.reboot': {},
-  'system.shutdown': {},
-}
-
-function registerDispatchTools(ctx, names, parametersByName, methods, contractOf) {
+function registerDispatchTools(ctx, names, methods, contractOf) {
   for (const name of names) {
     const spec = contractOf(name)
     ctx.tools.register(defineTool({
       name,
       description: (spec && spec.mutationSemantics) || name,
-      parameters: parametersByName[name] || {},
+      parameters: parametersFromContract(spec, name, ctx.logger),
       output: dispatchOutput(),
       async execute(args) {
         return methods[name](args)
@@ -152,8 +149,8 @@ export default function apply(ctx, config = {}) {
   const harness = config.harness || harnessLib.createHarness()
   const { mutations } = harnessLib
 
-  registerDispatchTools(ctx, mutations.l1Names(), L1_PARAMETERS, harness.dispatch.write, mutations.contract)
-  registerDispatchTools(ctx, mutations.l2Names(), L2_PARAMETERS, harness.dispatch.system, mutations.systemContract)
+  registerDispatchTools(ctx, mutations.l1Names(), harness.dispatch.write, mutations.contract)
+  registerDispatchTools(ctx, mutations.l2Names(), harness.dispatch.system, mutations.systemContract)
   registerReadOnlyTools(ctx, harness)
 }
 

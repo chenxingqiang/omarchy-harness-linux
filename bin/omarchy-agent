@@ -74,6 +74,21 @@ crush)
     command=(crush --yolo)
   fi
   ;;
+dsh)
+  # The DeepSeek Harness boots from ~/.local/bin/dsh, which forwards to
+  # the agentenv container. A prompt rides through as a headless one-shot
+  # answer; interactive use is the resident Web UI — the official dsh UX,
+  # dsh ships no TUI profile — so the browser is pointed at it instead of
+  # execing a nonexistent terminal app.
+  if [[ -n ${prompt:-} ]]; then
+    command=(dsh --profile headless "$prompt")
+  else
+    url=http://127.0.0.1:8377
+    echo "dsh interactive UX is the Web UI: $url (resident agentenv instance)"
+    command -v xdg-open >/dev/null 2>&1 && xdg-open "$url" >/dev/null 2>&1
+    exit 0
+  fi
+  ;;
 claude)
   command=(claude --permission-mode auto)
   [[ -n ${prompt:-} ]] && command+=(-- "$prompt")

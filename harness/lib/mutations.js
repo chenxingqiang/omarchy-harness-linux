@@ -35,6 +35,16 @@ const L1 = Object.freeze({
     auditEvent: 'omarchy/theme',
     replay: 're-apply the recorded theme name',
     allowedArgs: Object.freeze(['theme']),
+    // Agent-facing parameter metadata; consumed by bundle/dsh-omarchy/plugin.js
+    // to generate the dsh tool schema, so a mutation's CLI contract and its
+    // model-facing schema are declared once, here.
+    argSpec: Object.freeze({
+      theme: Object.freeze({
+        type: 'string',
+        required: true,
+        description: 'Theme directory name under ~/.config/omarchy/themes',
+      }),
+    }),
   }),
   'notify.send': Object.freeze({
     target: 'omarchy-notification-send <headline> [description] [-g] [-u]',
@@ -47,6 +57,12 @@ const L1 = Object.freeze({
     auditEvent: 'omarchy/notify',
     replay: 'do not re-send',
     allowedArgs: Object.freeze(['headline', 'description', 'glyph', 'urgency']),
+    argSpec: Object.freeze({
+      headline: Object.freeze({ type: 'string', required: true, description: 'Notification headline' }),
+      description: Object.freeze({ type: 'string', description: 'Notification body' }),
+      glyph: Object.freeze({ type: 'string', description: 'Icon name or path passed to -g' }),
+      urgency: Object.freeze({ type: 'string', enum: Object.freeze(['low', 'normal', 'critical']), description: 'Notification urgency' }),
+    }),
   }),
   'toggle.nightlight': Object.freeze({
     target: 'omarchy-toggle-nightlight',
@@ -71,6 +87,9 @@ const L1 = Object.freeze({
     auditEvent: 'omarchy/toggle',
     replay: 'restore recorded on|off',
     allowedArgs: Object.freeze(['state']),
+    argSpec: Object.freeze({
+      state: Object.freeze({ type: 'string', enum: Object.freeze(['on', 'off', 'toggle']), description: 'Desired bar state' }),
+    }),
   }),
   'toggle.idle': Object.freeze({
     target: 'omarchy-toggle-idle stay-awake|allow-idle',
@@ -83,6 +102,9 @@ const L1 = Object.freeze({
     auditEvent: 'omarchy/toggle',
     replay: 'restore recorded stay-awake|allow-idle',
     allowedArgs: Object.freeze(['state']),
+    argSpec: Object.freeze({
+      state: Object.freeze({ type: 'string', enum: Object.freeze(['stay-awake', 'allow-idle']), description: 'Desired idle-inhibition state' }),
+    }),
   }),
   'window.focus': Object.freeze({
     target: 'omarchy-hyprland-focus-app <app-name>',
@@ -95,6 +117,9 @@ const L1 = Object.freeze({
     auditEvent: 'omarchy/window',
     replay: 're-focus if the window still exists',
     allowedArgs: Object.freeze(['app']),
+    argSpec: Object.freeze({
+      app: Object.freeze({ type: 'string', required: true, description: 'Client class or title to focus' }),
+    }),
   }),
   'launch.terminal': Object.freeze({
     target: 'omarchy-launch-terminal',
@@ -134,6 +159,9 @@ const L2 = Object.freeze({
     auditEvent: 'omarchy/pkg',
     replay: 'do not re-install from reduce',
     allowedArgs: Object.freeze(['packages']),
+    argSpec: Object.freeze({
+      packages: Object.freeze({ type: 'array', items: 'string', required: true, description: 'Package names to install' }),
+    }),
   }),
   'pkg.drop': Object.freeze({
     target: 'omarchy-pkg-drop <packages...>',
@@ -146,6 +174,9 @@ const L2 = Object.freeze({
     auditEvent: 'omarchy/pkg',
     replay: 'do not re-drop from reduce',
     allowedArgs: Object.freeze(['packages']),
+    argSpec: Object.freeze({
+      packages: Object.freeze({ type: 'array', items: 'string', required: true, description: 'Package names to remove' }),
+    }),
   }),
   update: Object.freeze({
     target: 'omarchy-update -y',
