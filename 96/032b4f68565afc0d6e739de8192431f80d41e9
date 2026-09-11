@@ -1,0 +1,61 @@
+harness/docker/pilot-run.sh
+  s_c7a500c8fadd0f::t_9f1ad19ace6c52 2,4-6,8-20,24-25,30,33,39-48,50,52-53,60,62-71,75-110,114,124,129,138
+  s_c7a500c8fadd0f::t_3c2347c2eeb6ff 1,3,7,21-23,26-29,31-32,34-38,49,51,54-59,61,72-74,111-113,115-123,125-128,130-137,139
+harness/bundle/dsh-omarchy/plugin.js
+  s_c7a500c8fadd0f::t_8cbc9b782e53f6 62-66,77,93-96,98,100,103
+  s_c7a500c8fadd0f::t_8f5f830f99decf 67-73,75-76,78-92,97,99,109
+  s_c7a500c8fadd0f::t_1075b48fc67e1b 152-153
+harness/docker/settings.yaml
+  s_c7a500c8fadd0f::t_1654677933d0e6 1-36
+harness/docker/entrypoint.sh
+  s_c7a500c8fadd0f::t_d3736ea1ff8f9c 1-30
+  s_c7a500c8fadd0f::t_182f2e1cec80eb 31
+harness/docker/Containerfile
+  s_c7a500c8fadd0f::t_ec83f33b6ebb7a 26
+  s_c7a500c8fadd0f::t_dce6fa4c419ad3 1-25,27-39
+bin/omarchy-agent
+  s_c7a500c8fadd0f::t_959f1e6fcf1772 79-90
+  s_c7a500c8fadd0f::t_8338abc61d40c1 77-78
+  s_c7a500c8fadd0f::t_23934b08beb822 91
+harness/lib/mutations.js
+  s_c7a500c8fadd0f::t_49a3418bc95da8 177-179
+  s_c7a500c8fadd0f::t_d72cc8e3314f83 120-122
+  s_c7a500c8fadd0f::t_b15cf63b8fa08d 90-92
+  s_c7a500c8fadd0f::t_0b891d655dcae6 38-47
+  s_c7a500c8fadd0f::t_3268373c8772b8 60-65
+  s_c7a500c8fadd0f::t_1555a25a9d3c11 105-107
+  s_c7a500c8fadd0f::t_d2e28a360145ee 162-164
+harness/docker/.credentials.yaml
+  s_c7a500c8fadd0f::t_9716f2034d74a8 1-4
+README.md
+  s_c7a500c8fadd0f::t_7dbb0ea44a0550 39-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "96032b4f68565afc0d6e739de8192431f80d41e9",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "glm-5.3__dev"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "tool_type": "agent",
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "operation_id": "6aa3d9783e927e87388db400",
+        "edit_kind": "file_edit",
+        "runtime_client": "trae-tob-git-ai",
+        "source_scene": "unknown",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa3d9783e927e87388db400:afterEdit:08cdd783",
+        "tool_use_id": "6aa3d9783e927e87388db400",
+        "client_type": "ide",
+        "tool_id": "Edit",
+        "session_id": "6aa12de77da38ebfcb6324c5"
+      }
+    }
+  }
+}
