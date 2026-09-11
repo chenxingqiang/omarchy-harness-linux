@@ -162,6 +162,7 @@ Item {
           Text {
             width: parent.width
             text: root.sessionTitle
+            textFormat: Text.PlainText
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.heading
@@ -170,6 +171,7 @@ Item {
           Text {
             width: parent.width
             text: root.statusText
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: root.foreground
             opacity: 0.8
@@ -181,6 +183,7 @@ Item {
             width: parent.width
             visible: !root.hostDown
             text: root.keyboardHint
+            textFormat: Text.PlainText
             color: Color.muted
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -199,6 +202,7 @@ Item {
 
                 Text {
                   text: modelData.badge
+                  textFormat: Text.PlainText
                   color: root.pendingToneColor(modelData.tone)
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.bodySmall
@@ -208,6 +212,7 @@ Item {
                 Text {
                   width: parent.width
                   text: modelData.summary || modelData.approvalId
+                  textFormat: Text.PlainText
                   color: root.foreground
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
@@ -217,6 +222,7 @@ Item {
                 Text {
                   width: parent.width
                   text: modelData.hint
+                  textFormat: Text.PlainText
                   wrapMode: Text.WordWrap
                   color: Color.muted
                   font.family: root.fontFamily

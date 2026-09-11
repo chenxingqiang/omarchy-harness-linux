@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-if command -v systemctl >/dev/null; then
+if omarchy-cmd-present systemctl; then
   if systemctl --user is-active --quiet omarchy-harness.service 2>/dev/null; then
     exit 0
   fi

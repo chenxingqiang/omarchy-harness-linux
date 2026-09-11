@@ -27,8 +27,8 @@ resolve_harness_node() {
     exit 1
   fi
 
-  if command -v node >/dev/null; then
-    command -v node
+  if omarchy-cmd-present node; then
+    type -P node
     return
   fi
 

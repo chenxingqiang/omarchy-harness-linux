@@ -1,5 +1,7 @@
 echo "Repair legacy XCompose and remove vulnerable Omarchy 3 power udev rules"
 
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+
 xcompose="$HOME/.XCompose"
 packaged_xcompose="$OMARCHY_PATH/default/xcompose"
 legacy_xcompose_pattern='^[[:space:]]*include[[:space:]]+"[^"]*/\.local/share/omarchy/default/xcompose"[[:space:]]*$'

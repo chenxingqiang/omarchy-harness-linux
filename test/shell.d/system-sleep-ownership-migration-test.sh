@@ -491,8 +491,17 @@ EXTRA_FAKE_ROOT_DIRS="$admin_dir" \
 cmp -s "$mock_omarchy/default/systemd/system-sleep/keyboard-backlight" \
   "$sleep_dir/keyboard-backlight" ||
   fail "migration does not replace an unsafe symlink with trusted hook content"
-symlink_backup=$(find "$quarantine" -path '*/keyboard-backlight.*/original' -type l -print -quit)
-[[ -n $symlink_backup && $(readlink "$symlink_backup") == "$user_keyboard" ]] ||
+# Earlier scenarios leave their own keyboard-backlight backups under the same
+# quarantine, and find's traversal order is filesystem-defined, so match on the
+# preserved target rather than on whichever backup the scan happens to see first.
+symlink_backup=""
+while IFS= read -r candidate; do
+  if [[ $(readlink "$candidate") == "$user_keyboard" ]]; then
+    symlink_backup=$candidate
+    break
+  fi
+done < <(find "$quarantine" -path '*/keyboard-backlight.*/original' -type l -print)
+[[ -n $symlink_backup ]] ||
   fail "migration discards an unsafe custom symlink instead of preserving it"
 pass "migration quarantines unsafe symlinks outside the active systemd directory"
 
