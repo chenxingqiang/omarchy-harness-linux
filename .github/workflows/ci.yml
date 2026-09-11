@@ -32,6 +32,24 @@ jobs:
           repository: omacom/omarchy-iso
           path: omarchy-iso
 
+      - name: Restore packaged-like modes on the checkouts
+        run: |
+          # actions/checkout runs git inside the container under a permissive
+          # umask, leaving group-writable bits on the tree (dirs 775, files
+          # 664). The suites assert a packaged-like checkout -- root-owned with
+          # no group-write bits, which the Plymouth trust chain requires, and
+          # plain 0644 sources. Strip only the group/world write bits, so
+          # git's executable bits stay intact.
+          chmod -R g-w,o-w "$GITHUB_WORKSPACE"
+          # The trust chain also walks every parent of the checkout, so the
+          # runner's workspace directories must carry no group/world write
+          # bits either.
+          directory=$(dirname "$GITHUB_WORKSPACE")
+          while [[ $directory != "/" ]]; do
+            chmod g-w,o-w "$directory"
+            directory=$(dirname "$directory")
+          done
+
       - name: Install test dependencies
         run: |
           pacman -Sy --noconfirm archlinux-keyring

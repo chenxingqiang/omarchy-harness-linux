@@ -85,7 +85,7 @@ remove() {
     OMARCHY_TEST_INSTALLER_STATUS="${OMARCHY_TEST_INSTALLER_STATUS:-0}" \
     OMARCHY_TEST_SYSTEMCTL_LOG="$test_tmp/systemctl-log" \
     OMARCHY_TEST_GUM_LOG="$test_tmp/gum-log" \
-    HOME="$test_home" PATH="$mock_bin:$PATH" \
+    HOME="$test_home" PATH="$mock_bin:$ROOT/bin:$PATH" \
     bash "$test_tmp/remover" </dev/null >"$test_tmp/output" 2>&1
 }
 
@@ -100,7 +100,7 @@ remove_tty() {
     OMARCHY_TEST_SYSTEMCTL_LOG="$test_tmp/systemctl-log" \
     OMARCHY_TEST_GUM_LOG="$test_tmp/gum-log" \
     OMARCHY_TEST_GUM_STATUS="${OMARCHY_TEST_GUM_STATUS:-1}" \
-    HOME="$test_home" PATH="$mock_bin:$PATH" \
+    HOME="$test_home" PATH="$mock_bin:$ROOT/bin:$PATH" \
     script -qec "bash '$test_tmp/remover'" /dev/null >"$test_tmp/output" 2>&1
 }
 
@@ -274,7 +274,10 @@ def setup(name):
     runtime.mkdir(parents=True)
     (runtime / '.hermes-bootstrap-complete').touch()
     (home / '.config/Hermes').mkdir(parents=True)
-    env = {**os.environ, 'HOME': str(home), 'PATH': f"{scratch / 'bin'}:/usr/bin:/bin",
+    # The remover asks through omarchy-cmd-present, so $ROOT/bin must be on
+    # PATH; a bare scratch PATH leaves the data question silently unasked.
+    env = {**os.environ, 'HOME': str(home),
+           'PATH': f"{scratch / 'bin'}:{os.environ['ROOT']}/bin:/usr/bin:/bin",
            'OMARCHY_TEST_GUM_STATUS': '0'}
     for key in ('DROP', 'INSTALLER', 'SYSTEMCTL', 'GUM'):
         log = home / (key + '.log')
