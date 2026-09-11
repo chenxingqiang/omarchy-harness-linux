@@ -1,0 +1,14 @@
+# The dsh-omarchy bundle patch: exposes the Omarchy OS control plane
+# (../../lib/omarchy-harness.js) as a Cordis-native tool set. This is the
+# profile's second bundle layer, applied after dsh-base's insert. The actual
+# effectors, privilege decisions, and approval/audit pipeline stay in
+# ../../lib/; this row only registers them against ctx.tools -- composing the
+# existing control plane, not re-implementing it (plans/harness.md: "Do not
+# fork, do not replace, do not merge").
+#
+# The relative name resolves against this file's own directory, per
+# @deepseek-ai/cordis-plugin-loader's relative-specifier resolution.
+
+- insert:
+    - id: omarchy
+      name: ./plugin.js

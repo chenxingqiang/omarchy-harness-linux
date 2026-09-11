@@ -1,0 +1,15 @@
+{
+  "name": "@omarchy/harness",
+  "private": true,
+  "description": "Packaging pin for the DeepSeek Harness (dsh) runtime this overlay boots. node_modules is a packaging-time artifact (npm ci at build time into /usr/lib/omarchy-harness/), never committed; see plans/harness.md. Deliberately no \"type\" field: host.js and lib/*.js are CommonJS, unlike the dsh-omarchy bundle in bundle/dsh-omarchy/, which carries its own \"type\": \"module\".",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-base": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-web-app": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.1-rc.2",
+    "@deepseek-ai/cordis": "^4.0.1"
+  }
+}

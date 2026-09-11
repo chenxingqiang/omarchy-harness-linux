@@ -2,3 +2,8 @@
 # Python bytecode (orchestrator)
 __pycache__/
 *.pyc
+
+# The pinned dsh runtime tree (harness/package-lock.json is committed;
+# node_modules is a packaging-time artifact installed by `npm ci`, mirroring
+# /usr/lib/omarchy-harness/ in a real package build). See plans/harness.md.
+harness/node_modules/

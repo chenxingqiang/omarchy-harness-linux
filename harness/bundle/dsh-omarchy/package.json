@@ -1,0 +1,17 @@
+{
+  "name": "@omarchy/dsh-omarchy",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Cordis bundle exposing the Omarchy OS control plane (harness/lib) as dsh tools. Composed after dsh-base in the omarchy profile's dsh.profile.bundles; see plans/harness.md.",
+  "main": "plugin.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "0.1.1-rc.2"
+  }
+}

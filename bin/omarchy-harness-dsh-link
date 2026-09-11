@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# omarchy:summary=Materialize the omarchy dsh profile under $DSH_HOME and link the dsh-omarchy bundle
+# omarchy:group=harness
+# omarchy:name=dsh-link
+# omarchy:args=[--with-web]
+
+set -euo pipefail
+
+if (( EUID == 0 )); then
+  echo "Error: run omarchy-harness-dsh-link as your user, not under sudo." >&2
+  exit 1
+fi
+
+if [[ -z ${OMARCHY_PATH:-} ]]; then
+  echo "omarchy-harness-dsh-link: OMARCHY_PATH is unset" >&2
+  exit 1
+fi
+
+with_web=0
+if (( $# == 1 )); then
+  if [[ $1 == "--with-web" ]]; then
+    with_web=1
+  else
+    echo "Usage: omarchy-harness-dsh-link [--with-web]" >&2
+    exit 1
+  fi
+elif (( $# > 1 )); then
+  echo "Usage: omarchy-harness-dsh-link [--with-web]" >&2
+  exit 1
+fi
+
+integrity_json="$OMARCHY_PATH/harness/integrity.json"
+bundle_dir="$OMARCHY_PATH/harness/bundle/dsh-omarchy"
+[[ -f $integrity_json ]] || { echo "omarchy-harness-dsh-link: missing $integrity_json" >&2; exit 1; }
+[[ -f $bundle_dir/package.json ]] || { echo "omarchy-harness-dsh-link: missing $bundle_dir/package.json" >&2; exit 1; }
+
+if ! omarchy-cmd-present node; then
+  echo "omarchy-harness-dsh-link: node is not available" >&2
+  exit 1
+fi
+pinned_version=$(node -pe "require('$integrity_json').dsh.version")
+
+dsh_home=${DSH_HOME:-$HOME/.dsh}
+profile_dir="$dsh_home/profiles/omarchy"
+pin_marker="$dsh_home/.omarchy-harness-dsh-pin"
+
+mkdir -p "$dsh_home"
+
+# rc.8 changed the session-query SQLite format incompatibly (see
+# plans/harness.md). Rather than parse semver, treat ANY pin change as a
+# reason to back up before relinking: cheap (the jsonl session log and any
+# SQLite index), and correct across this boundary and every future pin bump.
+if [[ -f $pin_marker ]]; then
+  previous_version=$(<"$pin_marker")
+  if [[ $previous_version != "$pinned_version" ]] && [[ -d $profile_dir ]]; then
+    backup_dir="$dsh_home/backups/dsh-pin-$previous_version-to-$pinned_version-$(date +%Y%m%dT%H%M%S)"
+    mkdir -p "$backup_dir"
+    for item in sessions "profiles/omarchy"; do
+      if [[ -e "$dsh_home/$item" ]]; then
+        cp -a "$dsh_home/$item" "$backup_dir/$(basename "$item")"
+      fi
+    done
+    echo "omarchy-harness-dsh-link: backed up $dsh_home/{sessions,profiles/omarchy} to $backup_dir before switching $previous_version -> $pinned_version"
+  fi
+fi
+
+mkdir -p "$profile_dir"
+
+bundles_json='["dsh-base","@omarchy/dsh-omarchy"]'
+if (( with_web )); then
+  bundles_json='["dsh-base","@omarchy/dsh-omarchy","dsh-web-app"]'
+fi
+
+node -e "
+const fs = require('fs')
+const path = require('path')
+const profileDir = process.argv[1]
+const bundleDir = process.argv[2]
+const bundles = JSON.parse(process.argv[3])
+const manifestPath = path.join(profileDir, 'package.json')
+const manifest = {
+  name: 'omarchy-dsh-profile',
+  private: true,
+  dsh: { profile: { bundles } },
+  dependencies: { '@omarchy/dsh-omarchy': 'file:' + bundleDir },
+}
+fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+const patchPath = path.join(profileDir, 'cordis.patch.yml')
+if (!fs.existsSync(patchPath)) {
+  fs.writeFileSync(patchPath, '# User overrides for the omarchy dsh profile. Empty: dsh-base and\n# dsh-omarchy already supply every row this profile needs.\n[]\n')
+}
+" "$profile_dir" "$bundle_dir" "$bundles_json"
+
+echo "omarchy-harness-dsh-link: wrote $profile_dir/package.json and cordis.patch.yml"
+
+if ! omarchy-cmd-present npm; then
+  echo "omarchy-harness-dsh-link: npm is not available" >&2
+  exit 1
+fi
+( cd "$profile_dir" && npm install --no-audit --no-fund --loglevel=error )
+
+printf '%s' "$pinned_version" >"$pin_marker"
+
+echo "omarchy-harness-dsh-link: linked @omarchy/dsh-omarchy into $profile_dir (dsh $pinned_version)"
+echo "Run: dsh --profile omarchy --dump-config"
