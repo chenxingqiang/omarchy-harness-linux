@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# omarchy:summary=Agent-first terminal chat (default input asks the agent, !<cmd> runs bash)
+# Claude Code-style input mode for the default agent: every line typed is a
+# prompt unless it starts with "!", which runs the rest as a bash command.
+# :q / exit / quit leaves the chat. Each prompt is an independent headless
+# turn (no conversation memory); the resident Web UI is the continuous UX.
+
+agent=$(omarchy default agent 2>/dev/null) || agent="dsh"
+printf 'omarchy agent chat — default agent: %s\n' "$agent"
+printf 'plain text asks the agent; !<cmd> runs bash; :q quits\n\n'
+
+while IFS= read -r -e -p "$(printf '\033[36m❯\033[0m ')" line; do
+  [[ -z $line ]] && continue
+  case $line in
+    :q|exit|quit)
+      break
+      ;;
+    '!'*)
+      bash -c "${line#!}"
+      ;;
+    *)
+      omarchy-agent --inline --prompt "$line"
+      ;;
+  esac
+  printf '\n'
+done
