@@ -10,6 +10,13 @@ The SDK runtime is the dsh `sdk-minimal` profile subprocess under
 for how it is provisioned). The model is reached through the local gateway
 (llm-gw.local:8443, self-signed CA trusted via NODE_EXTRA_CA_CERTS),
 the officially supported way: DEEPSEEK_BASE_URL/DEEPSEEK_API_KEY injection.
+
+The session also carries the subagent tool (subagent.patch.yml next to this
+script, applied through the official --patch overlay), so the chat can fan
+out in-process workers natively: ask the agent to spawn subagents in batches
+of ~100 parallel per tool call. Verified up to 1000 subagents in ~20 minutes
+on the try-omarchy VM; a single giant tool call with 1000 tasks stalls the
+model's own generation, hence the batching guidance.
 """
 
 import os
@@ -24,6 +31,7 @@ from deepseek_harness.errors import HarnessError
 SDK_BASE = Path.home() / ".local/share/omarchy-dshsdk"
 GATEWAY_URL = "https://llm-gw.local:8443"
 MODEL = "deepseek-v4-flash"
+SUBAGENT_PATCH = Path(__file__).with_name("subagent.patch.yml")
 
 
 def gateway_api_key() -> str:
@@ -47,7 +55,8 @@ def main() -> int:
     os.environ["no_proxy"] = no_proxy
 
     print(f"omarchy agent chat — dsh sdk session ({MODEL} via {GATEWAY_URL})")
-    print("plain text asks the agent; !<cmd> runs bash; :q quits\n")
+    print("plain text asks the agent; !<cmd> runs bash; :q quits")
+    print("the agent can fan out subagents for scale tasks (batch ~100 per call)\n")
 
     with DeepSeekHarness(
         provider="deepseek-official",
@@ -55,6 +64,7 @@ def main() -> int:
         cwd=os.getcwd(),
         dsh_home=str(dsh_home),
         profile="sdk-minimal",
+        patches=(str(SUBAGENT_PATCH),),
         base_url=GATEWAY_URL,
         api_key=gateway_api_key(),
     ) as harness:

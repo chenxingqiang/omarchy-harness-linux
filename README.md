@@ -162,6 +162,14 @@ dsh                                  # opens the resident Web UI (8377)
 omarchy agent prompt "check disk"    # one-shot answer via dsh
 怎么查看内存占用                      # natural language -> dsh answers
 
+# Native subagent orchestration in the terminal chat — the session carries
+# the subagent tool (harness/sdk/subagent.patch.yml, applied as a --patch
+# overlay on the sdk-minimal profile). Fan out in batches, e.g.:
+#   "spawn 1000 subagents in 10 sequential batches of 100 parallel, each ..."
+# Verified on the try-omarchy VM: 1000/1000 finished in ~21 minutes
+# (~0.8 agent/s, gateway-bound). A single giant tool call with 1000 tasks
+# stalls the model's own generation — always batch (~100 per call).
+
 # Headless one-shot straight from the Mac:
 ssh -p 2222 johnson@127.0.0.1 'omarchy-agent --inline --prompt "hi"'
 

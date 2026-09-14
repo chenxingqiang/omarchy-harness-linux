@@ -1,0 +1,19 @@
+# Subagent orchestration overlay for the sdk-minimal profile: the same rows
+# dsh-base uses, so the SDK terminal session can fan out in-process workers.
+# Delivered through the official --patch overlay (the SDK `patches=` config),
+# so the materialized profile stays untouched.
+- insert:
+    - id: subagent
+      name: "@deepseek-ai/dsh-subagent"
+
+    - id: subagent-spawn-in-process
+      name: "@deepseek-ai/dsh-subagent-spawn-in-process"
+      config:
+        providerName: spawn
+
+    - id: tool-subagent
+      name: "@deepseek-ai/dsh-tool-subagent"
+      config:
+        provider: spawn
+        toolName: subagent
+        backgroundMode: continuable
