@@ -1,0 +1,39 @@
+harness/sdk/agent-chat.py
+  s_c7a500c8fadd0f::t_b827981ebb3ed3 13-19
+  s_c7a500c8fadd0f::t_d11be3e493d5d6 34
+  s_c7a500c8fadd0f::t_9eb11c26be2269 67
+  s_c7a500c8fadd0f::t_5f916d5f270c75 58-59
+harness/sdk/subagent.patch.yml
+  s_c7a500c8fadd0f::t_e036c218c8e1ff 1-19
+README.md
+  s_c7a500c8fadd0f::t_4c497933558c8d 165-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "2488da4b4d3bb90830094de824bc9dae5791ba7f",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "glm-5.3__dev"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "session_id": "6aa12de77da38ebfcb6324c5",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa76d223e927e87388db6ae:afterEdit:08cdd783",
+        "operation_id": "6aa76d223e927e87388db6ae",
+        "runtime_client": "trae-tob-git-ai",
+        "source_scene": "unknown",
+        "tool_use_id": "6aa76d223e927e87388db6ae",
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "tool_id": "Edit",
+        "client_type": "ide",
+        "tool_type": "agent",
+        "edit_kind": "file_edit"
+      }
+    }
+  }
+}
