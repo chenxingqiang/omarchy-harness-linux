@@ -1,0 +1,39 @@
+bin/omarchy-agent-chat
+  s_c7a500c8fadd0f::t_d471a319f4ae40 3-8,10,12-31
+bin/omarchy-agent
+  s_c7a500c8fadd0f::t_a0bf3efc85f6c1 80-82,93
+README.md
+  s_c7a500c8fadd0f::t_92a35753862467 121-135
+  s_c7a500c8fadd0f::t_38614c90223eaa 158-161
+harness/sdk/agent-chat.py
+  s_c7a500c8fadd0f::t_fd30014e768f2e 1-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "d5d46046427cdea41560075e5e0b8628b700ad48",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "glm-5.3__dev"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "tool_type": "agent",
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "edit_kind": "file_edit",
+        "session_id": "6aa12de77da38ebfcb6324c5",
+        "tool_use_id": "6aa754d03e927e87388db581",
+        "source_scene": "unknown",
+        "operation_id": "6aa754d03e927e87388db581",
+        "client_type": "ide",
+        "tool_id": "Edit",
+        "runtime_client": "trae-tob-git-ai",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa754d03e927e87388db581:afterEdit:08cdd783"
+      }
+    }
+  }
+}
