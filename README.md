@@ -118,6 +118,21 @@ sudo ln -sf ~/.local/bin/dsh /usr/local/bin/dsh
 omarchy default agent dsh
 ```
 
+The terminal chat runs on the official dsh Python SDK (persistent sessions
+with conversation memory). Provision its runtime once per VM:
+
+```sh
+python3 -m venv ~/.local/share/omarchy-dshsdk/venv
+~/.local/share/omarchy-dshsdk/venv/bin/pip install deepseek-harness-sdk
+mkdir -p ~/.local/share/omarchy-dshsdk/dsh-home
+# Gateway credentials + self-signed CA inside the SDK's DSH_HOME:
+cp harness/docker/.credentials.yaml harness/docker/llm-gw.crt \
+  ~/.local/share/omarchy-dshsdk/dsh-home/
+# The gateway name must resolve to the QEMU host alias (the container gets
+# this via --add-host; the host needs it in /etc/hosts):
+echo "10.0.2.2 llm-gw.local" | sudo tee -a /etc/hosts
+```
+
 Then add the natural-language fallback to `~/.bashrc` (multi-word or
 single non-ASCII word -> ask the agent):
 
@@ -140,7 +155,10 @@ ssh -p 2222 -f -N -L 8377:127.0.0.1:8377 johnson@127.0.0.1   # SSH tunnel
 open http://127.0.0.1:8377
 
 # Terminal inside the VM (desktop terminal window):
-a                                    # opens the resident Web UI
+a                                    # persistent terminal chat on the dsh
+                                     # Python SDK (plain text = prompt,
+                                     # !<cmd> = bash, :q quits)
+dsh                                  # opens the resident Web UI (8377)
 omarchy agent prompt "check disk"    # one-shot answer via dsh
 怎么查看内存占用                      # natural language -> dsh answers
 

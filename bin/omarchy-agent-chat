@@ -1,27 +1,31 @@
 #!/bin/bash
 
-# omarchy:summary=Agent-first terminal chat (default input asks the agent, !<cmd> runs bash)
-# Claude Code-style input mode for the default agent: every line typed is a
-# prompt unless it starts with "!", which runs the rest as a bash command.
-# :q / exit / quit leaves the chat. Each prompt is an independent headless
-# turn (no conversation memory); the resident Web UI is the continuous UX.
+# omarchy:summary=Agent-first terminal chat on the official dsh Python SDK
+# omarchy:examples=omarchy-agent-chat
+# Claude Code-style input mode: plain text asks the agent (one persistent
+# session, so it remembers the conversation), !<cmd> runs bash, :q quits.
+# The implementation is harness/sdk/agent-chat.py — bin/ tools are POSIX sh,
+# and the SDK runtime needs the venv python at ~/.local/share/omarchy-dshsdk.
 
-agent=$(omarchy default agent 2>/dev/null) || agent="dsh"
-printf 'omarchy agent chat — default agent: %s\n' "$agent"
-printf 'plain text asks the agent; !<cmd> runs bash; :q quits\n\n'
+set -euo pipefail
 
-while IFS= read -r -e -p "$(printf '\033[36m❯\033[0m ')" line; do
-  [[ -z $line ]] && continue
-  case $line in
-    :q|exit|quit)
-      break
-      ;;
-    '!'*)
-      bash -c "${line#!}"
-      ;;
-    *)
-      omarchy-agent --inline --prompt "$line"
-      ;;
-  esac
-  printf '\n'
-done
+sdk_base=${OMARCHY_DSHSDK_BASE:-$HOME/.local/share/omarchy-dshsdk}
+py=$sdk_base/venv/bin/python3
+
+# Find the SDK chat script: next to this wrapper in the repo layout (bin/ +
+# harness/sdk/), or in the VM checkout.
+here=$(cd "$(dirname "$0")" && pwd)
+chat=$here/../harness/sdk/agent-chat.py
+[[ -r $chat ]] || chat=$HOME/omarchy-harness-linux/harness/sdk/agent-chat.py
+
+if [[ ! -x $py ]]; then
+  echo "dsh SDK runtime not found at $py" >&2
+  echo "Provision it per the README (Running the Harness from a Mac)." >&2
+  exit 1
+fi
+if [[ ! -r $chat ]]; then
+  echo "agent-chat.py not found under harness/sdk/" >&2
+  exit 1
+fi
+
+exec "$py" "$chat" "$@"
