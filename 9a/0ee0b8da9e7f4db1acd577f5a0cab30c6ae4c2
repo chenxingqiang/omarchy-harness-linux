@@ -1,0 +1,50 @@
+harness/docker/pilot-run.sh
+  s_c7a500c8fadd0f::t_34380648a99602 73
+harness/docker/settings.yaml
+  s_c7a500c8fadd0f::t_b044ad9fdb0138 2,4,6
+  s_c7a500c8fadd0f::t_ee6a716d5e234b 17
+harness/docker/Containerfile
+  s_c7a500c8fadd0f::t_0efd27f45b2d5c 28-29,33
+  s_c7a500c8fadd0f::t_c776cba91ab255 23
+harness/sdk/agent-chat.py
+  s_c7a500c8fadd0f::t_c959b3d974aa2a 32
+  s_c7a500c8fadd0f::t_79fea735d979d3 11
+  s_c7a500c8fadd0f::t_cb72e237bf29c9 50,52-53
+harness/docker/.gitignore
+  s_c7a500c8fadd0f::t_61e39b7262d85c 1-2
+README.md
+  s_c7a500c8fadd0f::t_d5ba09ce31c8c2 148
+  s_c7a500c8fadd0f::t_43301bf4490ac3 59
+  s_c7a500c8fadd0f::t_bc5859b7f1fe3c 108
+  s_c7a500c8fadd0f::t_0707c65d8d2dd2 144
+  s_c7a500c8fadd0f::t_0ba3b9f356c7cc 39-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "9a0ee0b8da9e7f4db1acd577f5a0cab30c6ae4c2",
+  "prompts": {},
+  "sessions": {
+    "s_c7a500c8fadd0f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa12de77da38ebfcb6324c5",
+        "model": "glm-5.3__dev"
+      },
+      "human_author": "Xingqiang Chen <xingqiang.chen@witintech.com>",
+      "custom_attributes": {
+        "external_session_id": "6aa12de77da38ebfcb6324c5",
+        "client_type": "ide",
+        "tool_type": "agent",
+        "operation_id": "6aa8aac3748088fe8c74ba67",
+        "session_id": "6aa12de77da38ebfcb6324c5",
+        "tool_use_id": "6aa8aac3748088fe8c74ba67",
+        "dedupe_key": "6aa12de77da38ebfcb6324c5:6aa8aac3748088fe8c74ba67:afterEdit:f90b295c",
+        "edit_kind": "file_edit",
+        "runtime_client": "trae-tob-git-ai",
+        "tool_id": "Write",
+        "source_scene": "unknown"
+      }
+    }
+  }
+}
