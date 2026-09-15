@@ -29,7 +29,7 @@ from deepseek_harness import DeepSeekHarness
 from deepseek_harness.errors import HarnessError
 
 SDK_BASE = Path.home() / ".local/share/omarchy-dshsdk"
-GATEWAY_URL = "https://llm-gw.local:8443"
+GATEWAY_URL = os.getenv("LLM_GATEWAY_URL", "https://llm-gw.local:8443")
 MODEL = "deepseek-v4-flash"
 SUBAGENT_PATCH = Path(__file__).with_name("subagent.patch.yml")
 
@@ -47,7 +47,7 @@ def main() -> int:
     dsh_home = SDK_BASE / "dsh-home"
 
     # The dsh runtime is a node subprocess: it must trust the gateway's
-    # self-signed CA and reach llm-gw.local directly (the QEMU user-net
+    # self-signed CA and reach the gateway host directly (the QEMU user-net
     # host alias 10.0.2.2), not through the VM's HTTP proxy.
     os.environ["NODE_EXTRA_CA_CERTS"] = str(dsh_home / "llm-gw.crt")
     no_proxy = "llm-gw.local,localhost,127.0.0.1,10.0.2.2"

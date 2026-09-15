@@ -36,6 +36,21 @@ flowchart LR
 
 Read more at [omarchy.org](https://omarchy.org).
 
+## Snapshot policy (allow-time restore points)
+
+L2 system mutations that the contract marks `snapshot: true` (pkg.add,
+pkg.drop, update, snapshot.restore) run **approval → snapshot → execute →
+audit**: the restore point is taken after the human allows and before the
+effector runs, so a denied mutation never snapshots. The backend is probed
+once per harness: `snapper` on real btrfs installs (per-config numbered
+snapshots, ids recorded in the audit for rollback addressing) or a
+`package-journal` fallback on non-btrfs systems (the try-omarchy VM) —
+the explicit package list is journaled under
+`~/.local/state/omarchy/harness/restore-points/` and restores through the
+contract's inverse mutations. No usable backend fail-closes at allow
+(`SNAPSHOT_FAILED` / `SNAPSHOT_BACKEND_UNAVAILABLE`): an allowed mutation
+without a restore point does not execute.
+
 ## Running the Harness (dsh) from a Mac
 
 The full stack from a bare Apple Silicon Mac: [Try Omarchy](https://github.com/chenxingqiang/try-omarchy)
