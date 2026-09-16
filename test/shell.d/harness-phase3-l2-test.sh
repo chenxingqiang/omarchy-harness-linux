@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Phase 3 L2: finite dispatch.system. Pipeline is snapshot → approval → execute → audit.
+# Phase 3 L2: finite dispatch.system. Pipeline is approval → snapshot → execute → audit
+# (restore points are allow-time; a denied mutation never snapshots).
 # dispatch.write still cannot represent L2. Generic execute/shell stay unrepresentable.
 
 set -euo pipefail
@@ -40,6 +41,25 @@ case "$*" in
 esac
 EOF
 chmod +x "$STUB_BIN/omarchy"
+# The snapshot preflight elevates for snapper (mirroring omarchy-snapshot's
+# own sudo snapper) and probes snapper; stub both so the CLI flow can take a
+# restore point on any host.
+cat >"$STUB_BIN/sudo" <<'EOF'
+#!/bin/bash
+exec "$@"
+EOF
+cat >"$STUB_BIN/snapper" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+for arg in "$@"; do
+  if [ "$arg" = "list-configs" ]; then
+    printf 'config\nroot\n'
+    exit 0
+  fi
+done
+echo 42
+EOF
+chmod +x "$STUB_BIN/sudo" "$STUB_BIN/snapper"
 export CALL_LOG MUTATION_LOG
 export PATH="$STUB_BIN:$ROOT/bin:$PATH"
 
@@ -58,6 +78,16 @@ const harness = createHarness({
   newId: () => 'l2-' + (++ids),
   exec(argv) {
     calls.push(argv.slice())
+    if (argv[0] === 'sudo' && argv[1] === 'snapper') {
+      // Snapshot preflight elevates for snapper itself (mirroring
+      // omarchy-snapshot); it is not a wrapped Omarchy effector.
+      if (argv.includes('list-configs')) {
+        return { status: 0, stdout: 'config\nroot\n', stderr: '' }
+      }
+      if (argv.includes('create')) {
+        return { status: 0, stdout: '42\n', stderr: '' }
+      }
+    }
     if (argv[0] === 'sudo' || argv[0] === 'pkexec') {
       fail('dispatch.system must not wrap effectors that already elevate', argv.join(' '))
     }
@@ -114,7 +144,11 @@ assert(held && held.code === 'L2_UNREPRESENTABLE', 'generic execute is not on di
 const beforePkg = calls.length
 const pending = harness.dispatch.system['pkg.add']({ packages: ['htop'] })
 assertEqual(pending.pending, true, 'pkg.add asks for approval')
-assertDeepEqual(calls[beforePkg], ['omarchy', 'snapshot', 'create'], 'pkg.add snapshots before asking')
+assertEqual(
+  calls.slice(beforePkg).filter((argv) => argv[1] === 'snapper').length,
+  0,
+  'pkg.add does not snapshot while pending (restore points are allow-time)'
+)
 assertEqual(
   calls.filter((argv) => argv[1] === 'pkg').length,
   0,
@@ -138,8 +172,8 @@ assertDeepEqual(
   'allowed pkg.add calls the Omarchy effector'
 )
 assert(
-  calls.every((argv) => argv[0] === 'omarchy'),
-  'system argv is unwrapped omarchy; no sudo/pkexec wrapper'
+  !calls.some((argv) => (argv[0] === 'sudo' || argv[0] === 'pkexec') && argv[1] === 'omarchy'),
+  'effectors stay unwrapped; only the snapper preflight elevates'
 )
 assert(
   harness.store.events().some((event) => event.type === 'omarchy/pkg'),
@@ -175,20 +209,30 @@ const snapshotFailed = createHarness({
   now: () => '2026-08-20T00:00:00.000Z',
   newId: () => 'fail-1',
   exec(argv) {
-    if (argv[1] === 'snapshot') {
+    if (argv[0] === 'sudo' && argv[1] === 'snapper') {
+      if (argv.includes('list-configs')) {
+        return { status: 0, stdout: 'config\nroot\n', stderr: '' }
+      }
       return { status: 1, stdout: '', stderr: 'no snapper' }
+    }
+    if (argv[0] === 'pacman') {
+      return { status: 1, stdout: '', stderr: 'no pacman' }
+    }
+    if (argv[0] === 'omarchy' && argv[1] === 'notification') {
+      return { status: 0, stdout: 'ok\n', stderr: '' }
     }
     fail('pkg.add must not execute when snapshot fails', argv.join(' '))
     return { status: 1, stdout: '', stderr: '' }
   },
 })
-let snapErr = null
-try {
-  snapshotFailed.dispatch.system['pkg.add']({ packages: ['htop'] })
-} catch (error) {
-  snapErr = error
-}
-assert(snapErr && snapErr.code === 'SNAPSHOT_FAILED', 'required snapshot failure fail-closes')
+const failedPending = snapshotFailed.dispatch.system['pkg.add']({ packages: ['htop'] })
+assertEqual(failedPending.pending, true, 'pkg.add asks even when the backend is broken')
+const failedAllow = snapshotFailed.decide(failedPending.approvalId, 'allow')
+assert(
+  failedAllow && failedAllow.ok && !failedAllow.executed,
+  'required snapshot failure fail-closes at allow'
+)
+assertEqual(failedAllow.snapshot.code, 'SNAPSHOT_FAILED', 'snapshot failure is surfaced with its code')
 
 const rebootPending = harness.dispatch.system['system.reboot']({})
 assertEqual(rebootPending.pending, true, 'reboot always asks')
@@ -198,8 +242,8 @@ assertEqual(
   'pending reboot does not exec'
 )
 assertEqual(
-  calls.filter((argv) => argv[1] === 'snapshot').length,
-  2,
+  calls.filter((argv) => argv[1] === 'snapper' && argv.includes('create')).length,
+  1,
   'reboot does not take an extra preflight snapshot'
 )
 const rebooted = harness.decide(rebootPending.approvalId, 'allow')
@@ -211,10 +255,11 @@ assertDeepEqual(
 )
 
 const updatePending = harness.dispatch.system.update({})
-assertEqual(updatePending.pending, true, 'update asks after snapshot')
-assert(
-  calls.some((argv) => argv[1] === 'snapshot' && argv[2] === 'create'),
-  'update snapshots before asking'
+assertEqual(updatePending.pending, true, 'update asks')
+assertEqual(
+  calls.filter((argv) => argv[1] === 'snapper' && argv.includes('create')).length,
+  1,
+  'pending update does not snapshot yet'
 )
 assertEqual(
   calls.filter((argv) => argv[1] === 'update').length,
@@ -226,6 +271,11 @@ assertDeepEqual(
   calls[calls.length - 1],
   ['omarchy', 'update', '-y'],
   'allowed update is unattended'
+)
+assertEqual(
+  calls.filter((argv) => argv[1] === 'snapper' && argv.includes('create')).length,
+  2,
+  'allowed update takes its restore point before the effector runs'
 )
 
 const snapCreate = harness.dispatch.system['snapshot.create']({})
@@ -276,14 +326,16 @@ JS
 
 system_json=$("$ROOT/bin/omarchy-harness-host" system pkg.add '{"packages":["htop"]}')
 echo "$system_json" | jq -e '.pending == true' >/dev/null || fail "system CLI pkg.add is pending" "$system_json"
-grep -qx 'snapshot create' "$CALL_LOG" || fail "system CLI snapshots first" "$(cat "$CALL_LOG")"
+if grep -qx 'snapshot create' "$CALL_LOG"; then
+  fail "system CLI does not snapshot while pending" "$(cat "$CALL_LOG")"
+fi
 if grep -qx 'pkg add htop' "$CALL_LOG"; then
   fail "system CLI does not install before approval" "$(cat "$CALL_LOG")"
 fi
 approval_id=$(echo "$system_json" | jq -r '.approvalId')
 "$ROOT/bin/omarchy-harness-approve" "$approval_id" >/dev/null
 grep -qx 'pkg add htop' "$CALL_LOG" || fail "approved system CLI installs via omarchy pkg add" "$(cat "$CALL_LOG")"
-pass "system CLI pkg.add is snapshot then approval then exec"
+pass "system CLI pkg.add is approval then snapshot then exec"
 
 dump_json=$("$ROOT/bin/omarchy-harness-dump-config" --json)
 echo "$dump_json" | jq -e '.phase == 3 and .dispatch == "l2" and .write == true and .system == true and .l2_surface == "executable" and .preset == "session"' >/dev/null

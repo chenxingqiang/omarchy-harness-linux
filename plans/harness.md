@@ -1089,13 +1089,13 @@ dispatch.system.system.reboot
 dispatch.system.system.shutdown
 ```
 
-Every representable L2 op runs **snapshot (when the contract requires it) → approval → execute → audit**. Deny and a duplicate allow do not exec. Privilege: Omarchy effectors that already elevate are not wrapped with `sudo`/`pkexec`. The permission preset stays `session`, so system acts still ask. The user unit is still not enabled at first-run.
+Every representable L2 op runs **approval → snapshot (when the contract requires it) → execute → audit**. Restore points are allow-time: a denied mutation never snapshots, and a missing or failing backend fail-closes at allow (`SNAPSHOT_FAILED` / `SNAPSHOT_BACKEND_UNAVAILABLE`) — an allowed mutation without a restore point must not execute. The backend is probed once per harness: snapper on real btrfs installs (per-config numbered snapshots, ids captured for rollback addressing; the preflight elevates for snapper itself, mirroring `omarchy-snapshot`, and wraps no effector), or a package-journal fallback on non-btrfs systems (`pacman -Qe` journaled under `~/.local/state/omarchy/harness/restore-points/`, restored through the contract's inverse mutations). Deny and a duplicate allow do not exec. Privilege: Omarchy effectors that already elevate are not wrapped with `sudo`/`pkexec`. The permission preset stays `session`, so system acts still ask. The user unit is still not enabled at first-run.
 
 Held / unrepresentable on both surfaces: generic execute, shell, `hyprctl <string>`, `etc.write`, `usr.write`, firmware, `omarchy_cli`, `toggle.hybrid-gpu`.
 
 Pending L1/L2/session-reset approvals emit an `omarchy-action` toast that punches DND. The click command is a fixed `omarchy-shell shell summon omarchy.harness`. It does not auto-allow. Allow/deny still post to the host. Overlay remains an ACP client and is not a second approval store.
 
-The overlay daily-driver cards classify each pending mutation from the Session Log: session reset, L1 desktop, or L2 system. Snapshot-first is a recorded fact (`mutation.snapshot.status === 0`), not a catalog lookup in Quickshell. `Y` / `N` decide the first card through `omarchy-harness-approve` / `omarchy-harness-deny`. The keybind is `Super + Shift + H` (`omarchy-shell shell toggle omarchy.harness`). First-run enable of the user unit stays Phase 4.
+The overlay daily-driver cards classify each pending mutation from the Session Log: session reset, L1 desktop, or L2 system. Snapshot-first is carried by the pending mutation (`mutation.snapshot === true`, the intent; a legacy `mutation.snapshot.status === 0` recorded fact still counts), not a catalog lookup in Quickshell — the restore point itself is taken after allow, before execution. `Y` / `N` decide the first card through `omarchy-harness-approve` / `omarchy-harness-deny`. The keybind is `Super + Shift + H` (`omarchy-shell shell toggle omarchy.harness`). First-run enable of the user unit stays Phase 4.
 
 ### Phase 4 — harden and default-off → default-on
 

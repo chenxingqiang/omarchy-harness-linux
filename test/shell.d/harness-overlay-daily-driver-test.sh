@@ -77,6 +77,27 @@ assert(
   pkgView.pending[0].hint.toLowerCase().includes('snapshot'),
   'system hint names the snapshot when one was recorded'
 )
+
+const intentView = view.parseHostState(JSON.stringify({
+  metadata: { title: 'Install' },
+  pending: {
+    'id-intent': {
+      approvalId: 'id-intent',
+      mutation: {
+        type: 'l2',
+        op: 'pkg.add',
+        args: { packages: ['htop'] },
+        summary: 'Install package: htop',
+        snapshot: true,
+      },
+    },
+  },
+}))
+assertEqual(intentView.pending[0].snapshotFirst, true, 'allow-time semantics: snapshot intent also marks the card')
+assert(
+  intentView.pending[0].hint.toLowerCase().includes('snapshot'),
+  'system hint names the snapshot for an intent'
+)
 assertEqual(pkgView.statusText, '1 system approval pending', 'single system card has a plane status')
 
 const rebootView = view.parseHostState(JSON.stringify({

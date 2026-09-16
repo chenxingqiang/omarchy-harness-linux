@@ -101,8 +101,8 @@ calls.length = 0
 const pkg = harness.dispatch.system['pkg.add']({ packages: ['htop'] })
 assertEqual(pkg.pending, true, 'pkg.add is pending')
 assert(
-  calls.some((argv) => argv[1] === 'snapshot' && argv[2] === 'create'),
-  'pkg.add still snapshots first'
+  !calls.some((argv) => argv[1] === 'snapshot' && argv[2] === 'create'),
+  'pkg.add does not snapshot while pending (restore points are allow-time)'
 )
 assert(
   calls.some((argv) => argv[1] === 'notification' && argv.includes('Install package: htop')),

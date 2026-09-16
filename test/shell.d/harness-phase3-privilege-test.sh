@@ -25,6 +25,24 @@ printf '%s\n' "$*" >>"${CALL_LOG:?}"
 echo "ok"
 EOF
 chmod +x "$STUB_BIN/omarchy"
+# Snapshot preflight stubs (see harness-phase3-l2-test.sh): the preflight
+# elevates for snapper directly; neither argv is an Omarchy effector.
+cat >"$STUB_BIN/sudo" <<'EOF'
+#!/bin/bash
+exec "$@"
+EOF
+cat >"$STUB_BIN/snapper" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+for arg in "$@"; do
+  if [ "$arg" = "list-configs" ]; then
+    printf 'config\nroot\n'
+    exit 0
+  fi
+done
+echo 42
+EOF
+chmod +x "$STUB_BIN/sudo" "$STUB_BIN/snapper"
 export CALL_LOG
 export PATH="$STUB_BIN:$ROOT/bin:$PATH"
 
@@ -110,6 +128,11 @@ const harness = createHarness({
   tty: false,
   exec(argv) {
     calls.push(argv.slice())
+    if (argv[0] === 'sudo' && argv[1] === 'snapper') {
+      // Snapshot preflight elevates for snapper itself, mirroring what the
+      // omarchy-snapshot effector does internally; it wraps no effector.
+      return { status: 0, stdout: 'ok\n', stderr: '' }
+    }
     if (argv[0] === 'sudo' || argv[0] === 'pkexec') {
       fail('v0 L2 must not wrap effectors that already elevate', argv.join(' '))
     }

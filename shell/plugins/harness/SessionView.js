@@ -38,12 +38,15 @@ function pendingTone(kind) {
 }
 
 function snapshotFirst(mutation) {
-  return Boolean(
-    mutation &&
-    mutation.type === 'l2' &&
-    mutation.snapshot &&
-    Number(mutation.snapshot.status) === 0
-  )
+  if (!mutation || mutation.type !== 'l2' || !mutation.snapshot) {
+    return false
+  }
+  if (mutation.snapshot === true) {
+    // Allow-time semantics: the pending mutation carries the intent; the
+    // restore point is taken after the human allows, before execution.
+    return true
+  }
+  return Number(mutation.snapshot.status) === 0
 }
 
 function pendingSummary(mutation) {
@@ -81,7 +84,7 @@ function pendingHint(mutation) {
   }
   if (kind === 'system') {
     if (snapshotFirst(mutation)) {
-      return 'Snapshot taken before this request. Allow executes the system change.'
+      return 'Snapshot before execution on allow. Allow executes the system change.'
     }
     return 'System change. Allow executes on the machine.'
   }

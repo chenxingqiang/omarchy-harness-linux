@@ -6,6 +6,7 @@ const { createAcpSession, loadProfile } = require('./acp')
 const { createSessionStore, requiresApproval } = require('./session')
 const mutations = require('./mutations')
 const privilege = require('./privilege')
+const snapshots = require('./snapshots')
 
 const HARNESS_ROOT = path.resolve(__dirname, '..')
 const INTEGRITY_PATH = path.join(HARNESS_ROOT, 'integrity.json')
@@ -282,7 +283,7 @@ function createHarness(options = {}) {
     })
   }
 
-  function runL2(name, args = {}) {
+  function runL2(name, args = {}, snapshot) {
     const spec = mutations.systemContract(name)
     const argv = mutations.argvForSystem(name, args)
     const decision = privilegeFor(spec, argv)
@@ -296,6 +297,7 @@ function createHarness(options = {}) {
       argv: launched,
       privilege: decision,
       status,
+      ...(snapshot ? { snapshot } : {}),
     })
     return {
       ok: status === 0,
@@ -303,6 +305,7 @@ function createHarness(options = {}) {
       stdout: result.stdout || '',
       stderr: result.stderr || '',
       privilege: decision,
+      ...(snapshot ? { snapshot } : {}),
     }
   }
 
@@ -322,29 +325,15 @@ function createHarness(options = {}) {
       throw error
     }
     mutations.argvForSystem(name, args)
-    let snapshot = null
-    if (spec.snapshot) {
-      const snap = exec(['omarchy', 'snapshot', 'create'])
-      snapshot = { status: snap.status == null ? 1 : snap.status }
-      store.append({
-        type: 'omarchy/snapshot',
-        op: 'snapshot.create',
-        stage: 'preflight',
-        for: name,
-        status: snapshot.status,
-      })
-      if (snapshot.status !== 0) {
-        const error = new Error('SNAPSHOT_FAILED')
-        error.code = 'SNAPSHOT_FAILED'
-        throw error
-      }
-    }
+    // The restore point is taken after the human allows (see decide), so a
+    // denied mutation never snapshots. The pending mutation carries the
+    // intent only; the overlay card shows it as snapshot-first.
     return store.write({
       type: 'l2',
       op: name,
       args,
       ask: true,
-      snapshot,
+      snapshot: spec.snapshot ? true : null,
     })
   }
 
@@ -356,6 +345,14 @@ function createHarness(options = {}) {
   const systemMethods = {}
   for (const name of mutations.l2Names()) {
     systemMethods[name] = (args = {}) => systemOp(name, args)
+  }
+
+  let probedBackend = null
+  function snapshotBackend() {
+    if (probedBackend === null) {
+      probedBackend = snapshots.probe({ exec })
+    }
+    return probedBackend
   }
 
   function decide(approvalId, decision) {
@@ -372,6 +369,31 @@ function createHarness(options = {}) {
         result.executed = runL1(result.mutation.op, result.mutation.args || {})
       }
       if (result.mutation.type === 'l2') {
+        const spec = mutations.systemContract(result.mutation.op)
+        if (spec && spec.snapshot && result.mutation.snapshot) {
+          // Allow-time restore point: fail-closed when no backend can produce
+          // one — an allowed mutation without a restore point must not run.
+          const snapshot = snapshots.createPreflight(result.mutation.op, {
+            backend: snapshotBackend(),
+            exec,
+            restoreDir: path.join(
+              home,
+              '.local/state/omarchy/harness/restore-points'
+            ),
+            store,
+            now,
+          })
+          result.snapshot = snapshot
+          if (!snapshot.ok) {
+            return result
+          }
+          result.executed = runL2(
+            result.mutation.op,
+            result.mutation.args || {},
+            snapshot
+          )
+          return result
+        }
         result.executed = runL2(result.mutation.op, result.mutation.args || {})
       }
     }
